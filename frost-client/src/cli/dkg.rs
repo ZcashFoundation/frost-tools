@@ -54,7 +54,7 @@ pub(crate) async fn dkg_for_ciphersuite<C: Ciphersuite + MaybeIntoEvenY + 'stati
     let config = Config::read(config_path.clone())?;
 
     let server_url_parsed =
-        Url::parse(&format!("https://{}", server_url)).wrap_err("error parsing server-url")?;
+        Url::parse(&format!("https://{server_url}")).wrap_err("error parsing server-url")?;
 
     let comm_pubkey = config
         .communication_key

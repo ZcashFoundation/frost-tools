@@ -45,7 +45,7 @@ pub async fn list(args: &Command) -> Result<(), Box<dyn Error>> {
         .pubkey
         .clone();
 
-    let mut client = Client::new(format!("https://{}", server_url));
+    let mut client = Client::new(format!("https://{server_url}"));
 
     let mut rng = thread_rng();
 
@@ -77,7 +77,7 @@ pub async fn list(args: &Command) -> Result<(), Box<dyn Error>> {
                 .iter()
                 .map(|pubkey| config.contact_by_pubkey(pubkey))
                 .collect();
-            eprintln!("Session with ID {}", session_id);
+            eprintln!("Session with ID {session_id}");
             eprintln!(
                 "Coordinator: {}",
                 coordinator

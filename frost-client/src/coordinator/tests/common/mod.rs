@@ -73,16 +73,16 @@ pub fn get_helpers() -> Helpers {
 
     let commitments_from_part_3 = format!("{{\"header\":{{\"version\":0,\"ciphersuite\":\"FROST-ED25519-SHA512-v1\"}},\"identifier\":\"{}\",\"signing_share\":\"{}\",\"commitment\":[\"{}\",\"{}\"]}}", participant_id_3, signing_share, commitments[0], commitments[1]);
 
-    let signing_package_helper = format!("{{\"header\":{{\"version\":0,\"ciphersuite\":\"FROST-ED25519-SHA512-v1\"}},\"signing_commitments\":{{\"{}\":{{\"header\":{{\"version\":0,\"ciphersuite\":\"FROST-ED25519-SHA512-v1\"}},\"hiding\":\"{}\",\"binding\":\"{}\"}},\"{}\":{{\"header\":{{\"version\":0,\"ciphersuite\":\"FROST-ED25519-SHA512-v1\"}},\"hiding\":\"{}\",\"binding\":\"{}\"}}}},\"message\":\"{}\"}}", participant_id_1, hiding_commitment_1, binding_commitment_1, participant_id_3, hiding_commitment_3, binding_commitment_3, message);
+    let signing_package_helper = format!("{{\"header\":{{\"version\":0,\"ciphersuite\":\"FROST-ED25519-SHA512-v1\"}},\"signing_commitments\":{{\"{participant_id_1}\":{{\"header\":{{\"version\":0,\"ciphersuite\":\"FROST-ED25519-SHA512-v1\"}},\"hiding\":\"{hiding_commitment_1}\",\"binding\":\"{binding_commitment_1}\"}},\"{participant_id_3}\":{{\"header\":{{\"version\":0,\"ciphersuite\":\"FROST-ED25519-SHA512-v1\"}},\"hiding\":\"{hiding_commitment_3}\",\"binding\":\"{binding_commitment_3}\"}}}},\"message\":\"{message}\"}}");
 
-    let signature_1 = format!("{{\"header\":{{\"version\":0,\"ciphersuite\":\"FROST-ED25519-SHA512-v1\"}},\"share\":\"{}\"}}", signature_share_1);
-    let signature_3 = format!("{{\"header\":{{\"version\":0,\"ciphersuite\":\"FROST-ED25519-SHA512-v1\"}},\"share\":\"{}\"}}", signature_share_3);
+    let signature_1 = format!("{{\"header\":{{\"version\":0,\"ciphersuite\":\"FROST-ED25519-SHA512-v1\"}},\"share\":\"{signature_share_1}\"}}");
+    let signature_3 = format!("{{\"header\":{{\"version\":0,\"ciphersuite\":\"FROST-ED25519-SHA512-v1\"}},\"share\":\"{signature_share_3}\"}}");
 
-    let pub_key_package = format!("{{\"header\":{{\"version\":0,\"ciphersuite\":\"FROST-ED25519-SHA512-v1\"}},\"verifying_shares\":{{\"{}\":\"{}\",\"{}\":\"{}\",\"{}\":\"{}\"}},\"verifying_key\":\"{}\"}}", participant_id_1, public_key_1, participant_id_2, public_key_2, participant_id_3, public_key_3, verifying_key).to_string();
+    let pub_key_package = format!("{{\"header\":{{\"version\":0,\"ciphersuite\":\"FROST-ED25519-SHA512-v1\"}},\"verifying_shares\":{{\"{participant_id_1}\":\"{public_key_1}\",\"{participant_id_2}\":\"{public_key_2}\",\"{participant_id_3}\":\"{public_key_3}\"}},\"verifying_key\":\"{verifying_key}\"}}").to_string();
 
-    let commitments_input_1 = format!("{{\"header\":{{\"version\":0,\"ciphersuite\":\"FROST-ED25519-SHA512-v1\"}},\"hiding\":\"{}\", \"binding\":\"{}\"}}", hiding_commitment_1, binding_commitment_1);
+    let commitments_input_1 = format!("{{\"header\":{{\"version\":0,\"ciphersuite\":\"FROST-ED25519-SHA512-v1\"}},\"hiding\":\"{hiding_commitment_1}\", \"binding\":\"{binding_commitment_1}\"}}");
 
-    let commitments_input_3 = format!("{{\"header\":{{\"version\":0,\"ciphersuite\":\"FROST-ED25519-SHA512-v1\"}},\"hiding\":\"{}\", \"binding\":\"{}\"}}", hiding_commitment_3, binding_commitment_3);
+    let commitments_input_3 = format!("{{\"header\":{{\"version\":0,\"ciphersuite\":\"FROST-ED25519-SHA512-v1\"}},\"hiding\":\"{hiding_commitment_3}\", \"binding\":\"{binding_commitment_3}\"}}");
 
     Helpers {
         participant_id_1,

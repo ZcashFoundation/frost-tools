@@ -52,7 +52,7 @@ where
         let mut commitments_list: BTreeMap<Identifier<C>, SigningCommitments<C>> = BTreeMap::new();
 
         for i in 1..=num_of_participants {
-            writeln!(output, "Identifier for participant {:?} (hex encoded): ", i)?;
+            writeln!(output, "Identifier for participant {i:?} (hex encoded): ")?;
             let id_value = read_identifier(input)?;
             validate(id_value, pub_key_package, &participants_list)?;
             participants_list.push(id_value);

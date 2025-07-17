@@ -61,18 +61,18 @@ where
         // Read incoming network events.
         listener.for_each(|event| match event.network() {
             NetEvent::Connected(endpoint, false) => {
-                println!("Error connecting to server at {}", endpoint)
+                println!("Error connecting to server at {endpoint}")
             } // Used for explicit connections.
-            NetEvent::Connected(endpoint, true) => println!("Connected to server at {}", endpoint), // Used for explicit connections.
+            NetEvent::Connected(endpoint, true) => println!("Connected to server at {endpoint}"), // Used for explicit connections.
             NetEvent::Accepted(endpoint, _listener) => {
-                println!("Server accepted connection at {}", endpoint)
+                println!("Server accepted connection at {endpoint}")
             } // Tcp or Ws
             NetEvent::Message(endpoint, data) => {
                 println!("Received: {}", String::from_utf8_lossy(data));
                 input_tx.try_send((endpoint, data.to_vec())).unwrap();
             }
             NetEvent::Disconnected(endpoint) => {
-                println!("Disconnected from server at {}", endpoint)
+                println!("Disconnected from server at {endpoint}")
             } //Tcp or Ws
         });
     }

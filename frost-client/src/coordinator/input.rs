@@ -22,14 +22,10 @@ pub fn read_from_file_or_stdin(
         } else {
             let p = Path::new(&file_path);
             if p.exists() {
-                writeln!(output, "Reading {} from {}", object_name, file_path)?;
+                writeln!(output, "Reading {object_name} from {file_path}")?;
                 Some(p)
             } else {
-                writeln!(
-                    output,
-                    "File not found: {}\nWill read from stdin",
-                    file_path
-                )?;
+                writeln!(output, "File not found: {file_path}\nWill read from stdin")?;
                 None
             }
         }
@@ -37,7 +33,7 @@ pub fn read_from_file_or_stdin(
     match file_path {
         Some(file_path) => Ok(fs::read_to_string(file_path)?),
         None => {
-            writeln!(output, "Paste the {}: ", object_name)?;
+            writeln!(output, "Paste the {object_name}: ")?;
             let mut key_package = String::new();
             input.read_line(&mut key_package)?;
             Ok(key_package)

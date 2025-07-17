@@ -68,7 +68,7 @@ pub(crate) async fn run_for_ciphersuite<C: RandomizedCiphersuite + 'static>(
         group.server_url.clone().ok_or_eyre("server-url required")?
     };
     let server_url_parsed =
-        Url::parse(&format!("https://{}", server_url)).wrap_err("error parsing server-url")?;
+        Url::parse(&format!("https://{server_url}")).wrap_err("error parsing server-url")?;
 
     let signers = signers
         .iter()

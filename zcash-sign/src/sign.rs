@@ -244,7 +244,7 @@ pub fn sign(
             );
             let mut buffer = String::new();
             let stdin = std::io::stdin();
-            println!("Input hex-encoded signature #{}: ", i);
+            println!("Input hex-encoded signature #{i}: ");
             stdin.read_line(&mut buffer).unwrap();
             let signature = hex::decode(buffer.trim()).unwrap();
             let signature: [u8; 64] = signature.try_into().unwrap();

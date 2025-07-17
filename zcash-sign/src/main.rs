@@ -39,7 +39,7 @@ fn generate(args: &Command) -> Result<(), Box<dyn Error>> {
     // TODO: make params selectable
     let unified_address_str = unified_address.encode(&MainNetwork);
 
-    println!("Orchard-only unified address: {:?}", unified_address_str);
+    println!("Orchard-only unified address: {unified_address_str:?}");
 
     let sapling_fvk = if *danger_dummy_sapling {
         let mut seed = [0u8; 64];
@@ -53,7 +53,7 @@ fn generate(args: &Command) -> Result<(), Box<dyn Error>> {
     let ufvk = UnifiedFullViewingKey::new(sapling_fvk, Some(fvk.clone())).unwrap();
     let ufvk_str = ufvk.encode(&MainNetwork);
 
-    println!("Unified Full Viewing Key: {:?}", ufvk_str);
+    println!("Unified Full Viewing Key: {ufvk_str:?}");
 
     Ok(())
 }
@@ -83,7 +83,7 @@ fn sign(args: &Command) -> Result<(), Box<dyn Error>> {
     tx.write(&mut tx_bytes).unwrap();
 
     fs::write(tx_path, BASE64_STANDARD.encode(&tx_bytes))?;
-    println!("Tx written to {}", tx_path);
+    println!("Tx written to {tx_path}");
 
     Ok(())
 }

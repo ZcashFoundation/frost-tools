@@ -105,13 +105,12 @@ async fn check_step_1() {
 
     let signing_commitments = build_signing_commitments();
 
-    let input = format!("{}\n{}\n", num_of_participants, pub_key_package);
+    let input = format!("{num_of_participants}\n{pub_key_package}\n");
 
     let pargs = ProcessedArgs::new(&args, &mut input.as_bytes(), &mut buf).unwrap();
 
     let input = format!(
-        "{}\n{}\n{}\n{}\n",
-        participant_id_1, commitments_input_1, participant_id_3, commitments_input_3
+        "{participant_id_1}\n{commitments_input_1}\n{participant_id_3}\n{commitments_input_3}\n"
     );
     let mut buf = BufWriter::new(Vec::new());
 
@@ -150,8 +149,7 @@ async fn check_step_2() {
     let mut buf = BufWriter::new(Vec::new());
 
     let input = format!(
-        "2\n{}\n{}\n{}\n{}\n",
-        pub_key_package, message, commitments_from_part_1, commitments_from_part_3
+        "2\n{pub_key_package}\n{message}\n{commitments_from_part_1}\n{commitments_from_part_3}\n"
     );
     let pargs = ProcessedArgs::new(&args, &mut input.as_bytes(), &mut buf).unwrap();
 
@@ -166,7 +164,7 @@ async fn check_step_2() {
 
     assert!(signing_package == expected_signing_package);
 
-    let expected = format!("Signing Package:\n{}\n", signing_package_helper);
+    let expected = format!("Signing Package:\n{signing_package_helper}\n");
 
     let (_, res) = &buf.into_parts();
     let actual = String::from_utf8(res.as_ref().unwrap().to_owned()).unwrap();
@@ -194,7 +192,7 @@ async fn check_step_3() {
     let mut buf = BufWriter::new(Vec::new());
     let args = Args::default();
 
-    let input = format!("2\n{}\n{}\n", pub_key_package, message);
+    let input = format!("2\n{pub_key_package}\n{message}\n");
     let pargs = ProcessedArgs::new(&args, &mut input.as_bytes(), &mut buf).unwrap();
 
     // keygen output
@@ -203,7 +201,7 @@ async fn check_step_3() {
 
     // step 2 input
 
-    let input = format!("{}\n{}\n", signature_1, signature_3);
+    let input = format!("{signature_1}\n{signature_3}\n");
 
     let mut valid_input = input.as_bytes();
 
@@ -232,7 +230,7 @@ async fn check_step_3() {
     .await
     .unwrap();
 
-    let expected = format!("Please enter JSON encoded signature shares for participant {}:\nPlease enter JSON encoded signature shares for participant {}:\nSignature:\n{}\n", participant_id_1, participant_id_3, group_signature);
+    let expected = format!("Please enter JSON encoded signature shares for participant {participant_id_1}:\nPlease enter JSON encoded signature shares for participant {participant_id_3}:\nSignature:\n{group_signature}\n");
 
     let (_, res) = &buf.into_parts();
     let actual = String::from_utf8(res.as_ref().unwrap().to_owned()).unwrap();

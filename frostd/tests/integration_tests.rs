@@ -529,7 +529,7 @@ async fn test_http() -> Result<(), Box<dyn std::error::Error>> {
     }
     let r = r.json::<frostd::CreateNewSessionOutput>().await?;
     let session_id = r.session_id;
-    println!("Session ID: {}", session_id);
+    println!("Session ID: {session_id}");
 
     // Error tests
 
