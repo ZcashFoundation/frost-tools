@@ -25,6 +25,11 @@ async fn test_main_router_redpallas() -> Result<(), Box<dyn std::error::Error>> 
     test_main_router::<reddsa::frost::redpallas::PallasBlake2b512>(true).await
 }
 
+#[tokio::test]
+async fn test_main_router_secp256k1_tr() -> Result<(), Box<dyn std::error::Error>> {
+    test_main_router::<frost_secp256k1_tr::Secp256K1Sha256TR>(true).await
+}
+
 /// Test the entire FROST signing flow using axum_test.
 /// This is a good example of the overall flow but it's not a good example
 /// of the client code, see the next test for that.

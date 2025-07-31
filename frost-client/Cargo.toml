@@ -43,6 +43,7 @@ tempfile = { workspace = true }
 serde_json = { workspace = true }
 frost-core = { workspace = true, features = ["serde"] }
 frost-ed25519 = { workspace = true, features = ["serde"] }
+frost-secp256k1-tr = { workspace = true, features = ["serde"] }
 frost-rerandomized = { workspace = true, features = ["serde"] }
 reddsa = { workspace = true, features = ["frost"] }
 rand = { workspace = true }

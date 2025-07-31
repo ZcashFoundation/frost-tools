@@ -10,6 +10,7 @@ use frost_core::keys::PublicKeyPackage;
 use frost_core::Ciphersuite;
 use frost_ed25519::Ed25519Sha512;
 use frost_rerandomized::RandomizedCiphersuite;
+use frost_secp256k1_tr::Secp256K1Sha256TR;
 use reddsa::frost::redpallas::PallasBlake2b512;
 use reqwest::Url;
 
@@ -32,6 +33,8 @@ pub async fn run(args: &Command) -> Result<(), Box<dyn Error>> {
         run_for_ciphersuite::<Ed25519Sha512>(args).await
     } else if group.ciphersuite == PallasBlake2b512::ID {
         run_for_ciphersuite::<PallasBlake2b512>(args).await
+    } else if group.ciphersuite == Secp256K1Sha256TR::ID {
+        run_for_ciphersuite::<Secp256K1Sha256TR>(args).await
     } else {
         Err(eyre!("unsupported ciphersuite").into())
     }

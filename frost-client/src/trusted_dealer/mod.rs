@@ -43,6 +43,8 @@ pub trait MaybeIntoEvenY: Ciphersuite {
 // A ciphersuite that does not need the conversion.
 impl MaybeIntoEvenY for frost_ed25519::Ed25519Sha512 {}
 
+impl MaybeIntoEvenY for frost_secp256k1_tr::Secp256K1Sha256TR {}
+
 impl MaybeIntoEvenY for reddsa::frost::redpallas::PallasBlake2b512 {
     fn into_even_y(
         (secret_shares, public_key_package): (
