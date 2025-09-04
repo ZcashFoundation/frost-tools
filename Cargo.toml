@@ -21,7 +21,7 @@ dirs = "5.0.1"
 exitcode = "1.1.2"
 eyre = "0.6.12"
 frost-client = { path = "frost-client" }
-frost-core = "2.0.0"
+frost-core = "2.2.0"
 frost-ed25519 = "2.0.0"
 frost-rerandomized = "2.0.0-rc.0"
 frostd = { path = "frostd" }
