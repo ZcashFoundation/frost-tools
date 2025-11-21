@@ -215,10 +215,7 @@ async fn test_main_router<
         signing_package: signing_packages.clone(),
         aux_msg: aux_msg.to_vec(),
         randomizer: if rerandomized {
-            randomized_params
-                .iter()
-                .map(|p| (*p.randomizer()))
-                .collect()
+            randomized_params.iter().map(|p| *p.randomizer()).collect()
         } else {
             Vec::new()
         },
