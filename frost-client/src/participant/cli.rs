@@ -57,6 +57,8 @@ pub async fn cli_for_processed_args<C: RandomizedCiphersuite + 'static>(
         false
     } else if C::ID == PallasBlake2b512::ID {
         true
+    } else if C::ID == frost_secp256k1_tr::Secp256K1Sha256TR::ID {
+        true
     } else {
         panic!("invalid ciphersuite");
     };
