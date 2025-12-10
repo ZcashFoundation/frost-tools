@@ -17,20 +17,17 @@ use orchard::{
 };
 use sapling_crypto::PaymentAddress;
 use zcash_keys::keys::UnifiedFullViewingKey;
+use zcash_primitives::transaction::{components::sapling::zip212_enforcement, TxVersion};
 use zcash_primitives::transaction::{
     components::transparent::builder::TransparentBuilder,
     sighash::{signature_hash, SignableInput},
     txid::TxIdDigester,
     Transaction, TransactionData,
 };
-use zcash_primitives::transaction::{
-    components::{amount::NonNegativeAmount, sapling::zip212_enforcement},
-    TxVersion,
-};
 use zcash_proofs::prover::LocalTxProver;
 use zcash_protocol::{
     consensus::{BlockHeight, BranchId, MainNetwork},
-    value::ZatBalance as Amount,
+    value::{ZatBalance as Amount, Zatoshis},
 };
 
 use crate::transaction_plan::{
@@ -122,7 +119,7 @@ pub fn sign(
     }
 
     for output in tx_plan.outputs.iter() {
-        let value = NonNegativeAmount::from_u64(output.amount).unwrap();
+        let value = Zatoshis::from_u64(output.amount).unwrap();
         match &output.destination {
             Destination::Transparent(_addr) => {
                 let transparent_address = output.destination.transparent();
@@ -138,7 +135,7 @@ pub fn sign(
                         None,
                         sapling_address,
                         sapling_crypto::value::NoteValue::from_raw(value.into()),
-                        Some(*output.memo.as_array()),
+                        *output.memo.as_array(),
                     )
                     .map_err(|e| eyre!(e.to_string()))?;
             }
@@ -149,7 +146,7 @@ pub fn sign(
                         Some(orchard_ovk.clone()),
                         orchard_address,
                         NoteValue::from_raw(output.amount),
-                        Some(*output.memo.as_array()),
+                        *output.memo.as_array(),
                     )
                     .map_err(|e| eyre!(e.to_string()))?;
             }
@@ -240,7 +237,7 @@ pub fn sign(
             println!(
                 "Randomizer #{}: {}",
                 i,
-                hex::encode(alpha.to_repr().as_ref())
+                hex::encode::<&[u8]>(alpha.to_repr().as_ref())
             );
             let mut buffer = String::new();
             let stdin = std::io::stdin();
