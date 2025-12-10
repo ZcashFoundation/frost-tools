@@ -11,7 +11,7 @@ use orchard::keys::{Scope, SpendValidatingKey};
 use sapling_crypto::zip32::ExtendedSpendingKey;
 use zcash_client_backend::address::UnifiedAddress;
 use zcash_keys::keys::UnifiedFullViewingKey;
-use zcash_protocol::consensus::MainNetwork;
+use zcash_protocol::consensus::{self};
 
 use zcash_sign::transaction_plan::TransactionPlan;
 
@@ -21,9 +21,15 @@ fn generate(args: &Command) -> Result<(), Box<dyn Error>> {
     let Command::Generate {
         ak,
         danger_dummy_sapling,
+        network,
     } = args
     else {
         panic!("invalid Command");
+    };
+    let params: consensus::Network = match network.as_str() {
+        "main" => consensus::Network::MainNetwork,
+        "test" => consensus::Network::TestNetwork,
+        _ => Err(eyre!("Invalid network: {}", network))?,
     };
 
     let ak = hex::decode(ak.trim()).unwrap();
@@ -37,7 +43,7 @@ fn generate(args: &Command) -> Result<(), Box<dyn Error>> {
     let unified_address = UnifiedAddress::from_receivers(Some(orchard_address), None, None)
         .expect("must work with a shielded address");
     // TODO: make params selectable
-    let unified_address_str = unified_address.encode(&MainNetwork);
+    let unified_address_str = unified_address.encode(&params);
 
     println!("Orchard-only unified address: {unified_address_str:?}");
 
@@ -51,7 +57,7 @@ fn generate(args: &Command) -> Result<(), Box<dyn Error>> {
     };
 
     let ufvk = UnifiedFullViewingKey::new(sapling_fvk, Some(fvk.clone())).unwrap();
-    let ufvk_str = ufvk.encode(&MainNetwork);
+    let ufvk_str = ufvk.encode(&params);
 
     println!("Unified Full Viewing Key: {ufvk_str:?}");
 
@@ -63,17 +69,21 @@ fn sign(args: &Command) -> Result<(), Box<dyn Error>> {
         tx_plan,
         ufvk,
         tx: tx_path,
+        network,
     } = args
     else {
         panic!("invalid Command")
     };
-    // TODO: make configurable
-    let network = MainNetwork;
+    let params: consensus::Network = match network.as_str() {
+        "main" => consensus::Network::MainNetwork,
+        "test" => consensus::Network::TestNetwork,
+        _ => Err(eyre!("Invalid network: {}", network))?,
+    };
 
     let tx_plan = fs::read_to_string(tx_plan)?;
     let tx_plan: TransactionPlan = serde_json::from_str(&tx_plan)?;
 
-    let ufvk = UnifiedFullViewingKey::decode(&network, ufvk.trim()).unwrap();
+    let ufvk = UnifiedFullViewingKey::decode(&params, ufvk.trim()).unwrap();
 
     let mut rng = thread_rng();
 
