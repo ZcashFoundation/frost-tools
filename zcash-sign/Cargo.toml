@@ -12,6 +12,7 @@ halo2_proofs = { workspace = true }
 hex = { workspace = true }
 lazy_static = { workspace = true }
 orchard = { workspace = true, features = ["unstable-frost"] }
+pczt = { workspace = true, features = ["signer"] }
 rand = { workspace = true }
 rand_core = { workspace = true }
 sapling-crypto = { workspace = true }
@@ -26,3 +27,4 @@ zcash_keys = { workspace = true, features = ["test-dependencies", "orchard"] }
 zcash_primitives = { workspace = true }
 zcash_proofs = { workspace = true, features = ["bundled-prover"] }
 zcash_protocol = { workspace = true }
+zcash_transparent = { workspace = true, features = ["transparent-inputs"] }

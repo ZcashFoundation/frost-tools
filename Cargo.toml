@@ -34,6 +34,7 @@ itertools = "0.14.0"
 lazy_static = "1.5.0"
 message-io = "0.18"
 orchard = "0.11.0"
+pczt = "0.5"
 postcard = "1.1.1"
 rand = "0.8.5"
 rand_core = "0.6.4"
@@ -67,10 +68,11 @@ zcash_keys = "0.12.0"
 zcash_primitives = "0.26.1"
 zcash_proofs = "0.26.1"
 zcash_protocol = "0.7.1"
+zcash_transparent = "0.6"
 zeroize = "1.8.1"
 
 [patch.crates-io]
-# TODO: remove this when https://github.com/zcash/orchard/issues/430 is fully
-# addressed and a new release is made
-# orchard = { git = "https://github.com/conradoplg/orchard.git", rev = "f0c88b78a1d70d55ce6bb480566d132e57d5607b" }
-orchard = { path = "/home/conrado/zcash/orchard" }
+# TODO: remove this when https://github.com/zcash/orchard/pull/475 is merged,
+# and a all ECC crates are updated to point to the orchard version that includes
+# it.
+orchard = { git = "https://github.com/conradoplg/orchard.git", rev = "4d001c5b6ad15373e68a5923d5868fbe42daba96" }

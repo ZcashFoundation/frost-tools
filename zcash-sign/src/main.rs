@@ -2,9 +2,9 @@ mod args;
 
 use std::{error::Error, fs};
 
-use base64::{prelude::BASE64_STANDARD, Engine as _};
 use clap::Parser as _;
 use eyre::eyre;
+use pczt::Pczt;
 use rand::{thread_rng, RngCore};
 
 use orchard::keys::{Scope, SpendValidatingKey};
@@ -12,8 +12,6 @@ use sapling_crypto::zip32::ExtendedSpendingKey;
 use zcash_client_backend::address::UnifiedAddress;
 use zcash_keys::keys::UnifiedFullViewingKey;
 use zcash_protocol::consensus::{self};
-
-use zcash_sign::transaction_plan::TransactionPlan;
 
 use args::{Args, Command};
 
@@ -80,19 +78,21 @@ fn sign(args: &Command) -> Result<(), Box<dyn Error>> {
         _ => Err(eyre!("Invalid network: {}", network))?,
     };
 
-    let tx_plan = fs::read_to_string(tx_plan)?;
-    let tx_plan: TransactionPlan = serde_json::from_str(&tx_plan)?;
+    let tx_plan = fs::read(tx_plan)?;
+    let input = match Pczt::parse(&tx_plan) {
+        Ok(pczt) => zcash_sign::Input::Pczt(pczt),
+        Err(_) => zcash_sign::Input::YwalletTxPlan(serde_json::from_slice(&tx_plan)?),
+    };
 
-    let ufvk = UnifiedFullViewingKey::decode(&params, ufvk.trim()).unwrap();
+    let ufvk = ufvk
+        .clone()
+        .map(|ufvk_str| UnifiedFullViewingKey::decode(&params, ufvk_str.trim()).unwrap());
 
     let mut rng = thread_rng();
 
-    let tx = zcash_sign::sign(&mut rng, &tx_plan, &ufvk)?;
+    let tx_bytes = zcash_sign::sign(&mut rng, params, &input, ufvk.as_ref())?;
 
-    let mut tx_bytes = vec![];
-    tx.write(&mut tx_bytes).unwrap();
-
-    fs::write(tx_path, BASE64_STANDARD.encode(&tx_bytes))?;
+    fs::write(tx_path, tx_bytes)?;
     println!("Tx written to {tx_path}");
 
     Ok(())

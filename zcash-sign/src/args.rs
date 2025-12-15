@@ -35,9 +35,10 @@ pub(crate) enum Command {
         #[arg(short = 'o', long)]
         tx: String,
 
-        /// The UnifiedFullViewingKey generated previously, in hex format
+        /// The UnifiedFullViewingKey generated previously, in hex format.
+        /// Not required for PCZTs, only for Ywallet transaction plans.
         #[arg(short, long)]
-        ufvk: String,
+        ufvk: Option<String>,
 
         /// The network the address will be generated for: "main" or "test" (default: "main")
         #[arg(short, long)]
