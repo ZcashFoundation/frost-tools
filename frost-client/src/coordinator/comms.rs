@@ -2,13 +2,9 @@ pub mod cli;
 pub mod http;
 pub mod socket;
 
-use frost_core::{self as frost, Ciphersuite};
+use frost_core::{self as frost, Ciphersuite, Signature};
 
-use std::{
-    collections::BTreeMap,
-    error::Error,
-    io::{BufRead, Write},
-};
+use std::{collections::BTreeMap, error::Error};
 
 use async_trait::async_trait;
 
@@ -40,19 +36,17 @@ pub enum Message<C: Ciphersuite> {
 pub trait Comms<C: Ciphersuite> {
     async fn get_signing_commitments(
         &mut self,
-        input: &mut dyn BufRead,
-        output: &mut dyn Write,
         pub_key_package: &PublicKeyPackage<C>,
         num_of_participants: u16,
     ) -> Result<BTreeMap<Identifier<C>, SigningCommitments<C>>, Box<dyn Error>>;
 
     async fn send_signing_package_and_get_signature_shares(
         &mut self,
-        input: &mut dyn BufRead,
-        output: &mut dyn Write,
         signing_package: &SigningPackage<C>,
         randomizer: Option<frost_rerandomized::Randomizer<C>>,
     ) -> Result<BTreeMap<Identifier<C>, SignatureShare<C>>, Box<dyn Error>>;
+
+    async fn process_signature(&mut self, signature: &Signature<C>) -> Result<(), Box<dyn Error>>;
 
     /// Do any cleanups in case an error occurs during the protocol run.
     async fn cleanup_on_error(&mut self) -> Result<(), Box<dyn Error>> {

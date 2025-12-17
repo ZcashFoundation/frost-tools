@@ -13,6 +13,7 @@ use frost::Identifier;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::io::BufWriter;
+use std::io::Cursor;
 use std::vec;
 
 use rand::thread_rng;
@@ -37,7 +38,6 @@ async fn trusted_dealer_journey() {
         message: vec![],
         ..Default::default()
     };
-    let mut coordinator_comms = CoordinatorCLIComms::new();
 
     // For a CLI test we can use the same CLIComms instance
     let mut participant_comms = ParticipantCLIComms::new();
@@ -119,7 +119,7 @@ async fn trusted_dealer_journey() {
     let pcoordinator_args =
         ProcessedArgs::new(&coordinator_args, &mut input.as_bytes(), &mut buf).unwrap();
 
-    let step_1_input = format!(
+    let mut input = Cursor::new(format!(
         "{}\n{}\n{}\n{}\n{}\n{}\n",
         id_input_1,
         serde_json::to_string(&commitments_map[&participant_id_1]).unwrap(),
@@ -127,13 +127,13 @@ async fn trusted_dealer_journey() {
         serde_json::to_string(&commitments_map[&participant_id_2]).unwrap(),
         id_input_3,
         serde_json::to_string(&commitments_map[&participant_id_3]).unwrap(),
-    );
+    ));
+
+    let mut coordinator_comms = CoordinatorCLIComms::new(&mut input, &mut buf);
 
     let participants_config = frost_client::coordinator::round_1::get_commitments(
         &pcoordinator_args,
         &mut coordinator_comms,
-        &mut step_1_input.as_bytes(),
-        &mut buf,
     )
     .await
     .unwrap();
@@ -144,11 +144,11 @@ async fn trusted_dealer_journey() {
 
     let signing_package = frost_client::coordinator::cli::build_signing_package(
         &pcoordinator_args,
-        &mut buf,
         commitments_map.clone(),
     );
 
     // Round 2
+    let mut buf = BufWriter::new(Vec::new());
 
     for participant_index in 1..=3 {
         let participant_identifier = Identifier::try_from(participant_index).unwrap();
@@ -175,18 +175,19 @@ async fn trusted_dealer_journey() {
 
     // coordinator step 3
 
-    let step_3_input = format!(
+    let mut step_3_input = Cursor::new(format!(
         "{}\n{}\n{}\n",
         serde_json::to_string(&signature_shares[&participant_id_1]).unwrap(),
         serde_json::to_string(&signature_shares[&participant_id_2]).unwrap(),
         serde_json::to_string(&signature_shares[&participant_id_3]).unwrap()
-    );
+    ));
+    // We recreate coordinator_comms to be able to provide new input
+    let mut coordinator_comms = CoordinatorCLIComms::new(&mut step_3_input, &mut buf);
+
     let group_signature =
         frost_client::coordinator::round_2::send_signing_package_and_get_signature_shares(
             &pcoordinator_args,
             &mut coordinator_comms,
-            &mut step_3_input.as_bytes(),
-            &mut buf,
             participants_config,
             &signing_package,
         )

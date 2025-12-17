@@ -1,5 +1,7 @@
 use clap::{Parser, Subcommand};
 
+use crate::cli::coordinator::CoordinatorCommand;
+
 #[derive(Parser, Clone)]
 #[command(version, about, long_about = None)]
 pub struct Args {
@@ -7,7 +9,7 @@ pub struct Args {
     pub command: Command,
 }
 
-#[derive(Subcommand, Clone)]
+#[derive(Subcommand, Clone, Debug)]
 pub enum Command {
     /// Initializes the user, generating a communication key pair and saving to
     /// the config file.
@@ -167,41 +169,7 @@ pub enum Command {
         close_all: bool,
     },
     /// Start a new FROST signing session.
-    Coordinator {
-        /// The path to the config file to manage. If not specified, it uses
-        /// $HOME/.local/frost/credentials.toml
-        #[arg(short, long)]
-        config: Option<String>,
-        /// The server URL to use. If not specified, it will use the server URL
-        /// for the specified group, if any. It will use the username previously
-        /// logged in via the `login` subcommand for the given server.
-        #[arg(short, long)]
-        server_url: Option<String>,
-        /// The group to use, identified by the group public key (use `groups`
-        /// to list)
-        #[arg(short, long)]
-        group: String,
-        /// The comma-separated hex-encoded public keys of the signers to use.
-        #[arg(short = 'S', long, value_delimiter = ',')]
-        signers: Vec<String>,
-        /// The messages to sign. Each instance can be a file with the raw message,
-        /// "" or "-". If "" or "-" is specified, then it will be read from standard
-        /// input as a hex string. If none are passed, a single one will be read
-        /// from standard input as a hex string.
-        #[arg(short = 'm', long)]
-        message: Vec<String>,
-        /// The randomizers to use. Each instance can be a file with the raw
-        /// randomizer, "" or "-". If "" or "-" is specified, then it will be
-        /// read from standard input as a hex string. If none are passed, random
-        /// ones will be generated if the ciphersuite is redpallas. If one or
-        /// more are passed, the number should match the `message` parameter.
-        #[arg(short = 'r', long)]
-        randomizer: Vec<String>,
-        /// Where to write the generated raw bytes signature. If "-", the
-        /// human-readable hex-string is printed to stdout.
-        #[arg(short = 'o', long, default_value = "")]
-        signature: String,
-    },
+    Coordinator(CoordinatorCommand),
     /// Participate in a FROST signing session.
     Participant {
         /// The path to the config file to manage. If not specified, it uses
