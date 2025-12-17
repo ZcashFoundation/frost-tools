@@ -3,7 +3,6 @@
 use std::{
     collections::{BTreeMap, HashMap},
     error::Error,
-    io::{BufRead, Write},
     marker::PhantomData,
     time::Duration,
     vec,
@@ -13,11 +12,11 @@ use async_trait::async_trait;
 use eyre::{eyre, OptionExt};
 use frost_core::{
     keys::PublicKeyPackage, round1::SigningCommitments, round2::SignatureShare, Ciphersuite,
-    Identifier, SigningPackage,
+    Identifier, Signature, SigningPackage,
 };
 use rand::thread_rng;
 
-use crate::cipher::Cipher;
+use crate::cipher::{Cipher, PrivateKey};
 use crate::client::Client;
 use crate::{
     api::{self, PublicKey, SendSigningPackageArgs, Uuid},
@@ -27,10 +26,30 @@ use crate::{
 use super::super::args::ProcessedArgs;
 use super::Comms;
 
+#[derive(Clone)]
+pub struct Args<C: Ciphersuite> {
+    /// Signers to use in HTTP mode, as a map of public keys to identifiers.
+    pub signers: HashMap<PublicKey, Identifier<C>>,
+
+    /// IP to bind to, if using socket comms.
+    /// IP to connect to, if using HTTP mode.
+    pub ip: String,
+
+    /// Port to bind to, if using socket comms.
+    /// Port to connect to, if using HTTP mode.
+    pub port: u16,
+
+    /// The coordinator's communication private key for HTTP mode.
+    pub comm_privkey: Option<PrivateKey>,
+
+    /// The coordinator's communication public key for HTTP mode.
+    pub comm_pubkey: Option<PublicKey>,
+}
+
 pub struct HTTPComms<C: Ciphersuite> {
     client: Client,
     session_id: Option<Uuid>,
-    args: ProcessedArgs<C>,
+    args: Args<C>,
     state: CoordinatorSessionState<C>,
     pubkeys: HashMap<PublicKey, Identifier<C>>,
     cipher: Option<Cipher>,
@@ -38,14 +57,14 @@ pub struct HTTPComms<C: Ciphersuite> {
 }
 
 impl<C: Ciphersuite> HTTPComms<C> {
-    pub fn new(args: &ProcessedArgs<C>) -> Result<Self, Box<dyn Error>> {
+    pub fn new(pargs: &ProcessedArgs<C>, args: &Args<C>) -> Result<Self, Box<dyn Error>> {
         Ok(Self {
             client: Client::new(format!("https://{}:{}", args.ip, args.port)),
             session_id: None,
             args: args.clone(),
             state: CoordinatorSessionState::new(
-                args.messages.len(),
-                args.num_signers as usize,
+                pargs.messages.len(),
+                pargs.num_signers as usize,
                 args.signers.clone(),
             ),
             pubkeys: Default::default(),
@@ -59,8 +78,6 @@ impl<C: Ciphersuite> HTTPComms<C> {
 impl<C: Ciphersuite + 'static> Comms<C> for HTTPComms<C> {
     async fn get_signing_commitments(
         &mut self,
-        _input: &mut dyn BufRead,
-        _output: &mut dyn Write,
         _pub_key_package: &PublicKeyPackage<C>,
         _num_signers: u16,
     ) -> Result<BTreeMap<Identifier<C>, SigningCommitments<C>>, Box<dyn Error>> {
@@ -149,8 +166,6 @@ impl<C: Ciphersuite + 'static> Comms<C> for HTTPComms<C> {
 
     async fn send_signing_package_and_get_signature_shares(
         &mut self,
-        _input: &mut dyn BufRead,
-        _output: &mut dyn Write,
         signing_package: &SigningPackage<C>,
         randomizer: Option<frost_rerandomized::Randomizer<C>>,
     ) -> Result<BTreeMap<Identifier<C>, SignatureShare<C>>, Box<dyn Error>> {
@@ -218,6 +233,10 @@ impl<C: Ciphersuite + 'static> Comms<C> for HTTPComms<C> {
 
         // TODO: support more than 1
         Ok(signature_shares[0].clone())
+    }
+
+    async fn process_signature(&mut self, _signature: &Signature<C>) -> Result<(), Box<dyn Error>> {
+        Ok(())
     }
 
     async fn cleanup_on_error(&mut self) -> Result<(), Box<dyn Error>> {

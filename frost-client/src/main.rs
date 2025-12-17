@@ -20,7 +20,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         Command::Sessions { .. } => cli::session::list(&args.command).await,
         Command::TrustedDealer { .. } => cli::trusted_dealer::trusted_dealer(&args.command),
         Command::Dkg { .. } => cli::dkg::dkg(&args.command).await,
-        Command::Coordinator { .. } => cli::coordinator::run(&args.command).await,
+        Command::Coordinator { .. } => cli::coordinator::run(&args.command).await.map(|_| ()),
         Command::Participant { .. } => cli::participant::run(&args.command).await,
     }?;
 

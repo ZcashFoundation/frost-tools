@@ -2,10 +2,7 @@ use frost_core::{self as frost, Ciphersuite};
 
 use frost::{keys::PublicKeyPackage, round1::SigningCommitments, Identifier};
 
-use std::{
-    collections::BTreeMap,
-    io::{BufRead, Write},
-};
+use std::collections::BTreeMap;
 
 use super::{args::ProcessedArgs, comms::Comms};
 
@@ -18,13 +15,8 @@ pub struct ParticipantsConfig<C: Ciphersuite> {
 pub async fn get_commitments<C: Ciphersuite>(
     args: &ProcessedArgs<C>,
     comms: &mut dyn Comms<C>,
-    reader: &mut dyn BufRead,
-    logger: &mut dyn Write,
 ) -> Result<ParticipantsConfig<C>, Box<dyn std::error::Error>> {
-    let participants = read_commitments(args, comms, reader, logger).await?;
-    if args.cli {
-        print_participants(logger, &participants.commitments);
-    }
+    let participants = read_commitments(args, comms).await?;
     Ok(participants)
 }
 
@@ -37,28 +29,15 @@ pub async fn get_commitments<C: Ciphersuite>(
 async fn read_commitments<C: Ciphersuite>(
     args: &ProcessedArgs<C>,
     comms: &mut dyn Comms<C>,
-    input: &mut dyn BufRead,
-    logger: &mut dyn Write,
 ) -> Result<ParticipantsConfig<C>, Box<dyn std::error::Error>> {
     let commitments_list = comms
-        .get_signing_commitments(input, logger, &args.public_key_package, args.num_signers)
+        .get_signing_commitments(&args.public_key_package, args.num_signers)
         .await?;
 
     Ok(ParticipantsConfig {
         commitments: commitments_list,
         pub_key_package: args.public_key_package.clone(),
     })
-}
-
-pub fn print_participants<C: Ciphersuite>(
-    logger: &mut dyn Write,
-    participants: &BTreeMap<Identifier<C>, SigningCommitments<C>>,
-) {
-    writeln!(logger, "Selected participants: ",).unwrap();
-
-    for p in participants.keys() {
-        writeln!(logger, "{}", serde_json::to_string(p).unwrap()).unwrap();
-    }
 }
 
 #[cfg(test)]
