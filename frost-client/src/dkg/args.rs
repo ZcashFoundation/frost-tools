@@ -1,3 +1,6 @@
+// Remove after https://github.com/rust-lang/rust/issues/147648 is fixed
+#![allow(unused_assignments)]
+
 use std::rc::Rc;
 
 use crate::cipher::{PrivateKey, PublicKey};
