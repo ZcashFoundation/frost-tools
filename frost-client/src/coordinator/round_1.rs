@@ -31,11 +31,11 @@ async fn read_commitments<C: Ciphersuite>(
     comms: &mut dyn Comms<C>,
 ) -> Result<ParticipantsConfig<C>, Box<dyn std::error::Error>> {
     let commitments_list = comms
-        .get_signing_commitments(&args.public_key_package, args.num_signers)
+        .get_signing_commitments(&args.public_key_package, args.num_signers, 1)
         .await?;
 
     Ok(ParticipantsConfig {
-        commitments: commitments_list,
+        commitments: commitments_list[0].clone(),
         pub_key_package: args.public_key_package.clone(),
     })
 }

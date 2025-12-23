@@ -6,7 +6,10 @@ use frost_core::Ciphersuite;
 
 use async_trait::async_trait;
 
-use crate::api::{self, SendSigningPackageArgs};
+use crate::{
+    api::{self, SendSigningPackageArgs},
+    participant::round1::print_values,
+};
 use frost::{
     keys::PublicKeyPackage, round1::SigningCommitments, round2::SignatureShare, Identifier,
     SigningPackage,
@@ -41,14 +44,29 @@ impl<C> Comms<C> for CLIComms<C>
 where
     C: Ciphersuite + 'static,
 {
+    async fn get_message_count(
+        &mut self,
+        _input: &mut dyn BufRead,
+        _output: &mut dyn Write,
+    ) -> Result<u8, Box<dyn Error>> {
+        Ok(1)
+    }
+
     async fn get_signing_package(
         &mut self,
         input: &mut dyn BufRead,
         output: &mut dyn Write,
-        _commitments: SigningCommitments<C>,
+        commitments: &[SigningCommitments<C>],
         _identifier: Identifier<C>,
         rerandomized: bool,
     ) -> Result<SendSigningPackageArgs<C>, Box<dyn Error>> {
+        if commitments.len() != 1 {
+            panic!("CLIComms only supports single message");
+        }
+        let commitments = commitments.first().expect("was just checked");
+
+        print_values(*commitments, output)?;
+
         writeln!(output, "Enter the JSON-encoded SigningPackage:")?;
 
         let mut signing_package_json = String::new();
@@ -85,7 +103,7 @@ where
     async fn send_signature_share(
         &mut self,
         _identifier: Identifier<C>,
-        _signature_share: SignatureShare<C>,
+        _signature_shares: &[SignatureShare<C>],
     ) -> Result<(), Box<dyn Error>> {
         Ok(())
     }

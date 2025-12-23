@@ -86,6 +86,9 @@ pub struct ProcessedArgs<C: Ciphersuite> {
 
     /// The randomizers to use.
     pub randomizers: Vec<Randomizer<C>>,
+
+    /// An optional auxiliary message to include in the signing package.
+    pub aux_msg: Option<Vec<u8>>,
 }
 
 impl<C: Ciphersuite + 'static> ProcessedArgs<C> {
@@ -128,6 +131,8 @@ impl<C: Ciphersuite + 'static> ProcessedArgs<C> {
             public_key_package,
             messages,
             randomizers,
+            // TODO: add support
+            aux_msg: None,
         })
     }
 }
@@ -171,6 +176,23 @@ pub fn read_messages(
             .collect::<Result<_, Box<dyn Error>>>()?
     };
     Ok(messages)
+}
+
+pub fn read_aux_message(
+    filename: &String,
+    output: &mut dyn Write,
+    input: &mut dyn BufRead,
+) -> Result<Vec<u8>, Box<dyn Error>> {
+    let msg = if *filename == "-" || filename.is_empty() {
+        writeln!(output, "The aux message to be sent (hex encoded)")?;
+        let mut msg = String::new();
+        input.read_line(&mut msg)?;
+        hex::decode(msg.trim())?
+    } else {
+        eprintln!("Reading aux message from {}...", &filename);
+        fs::read(filename)?
+    };
+    Ok(msg)
 }
 
 pub fn read_randomizers<C: Ciphersuite + 'static>(
