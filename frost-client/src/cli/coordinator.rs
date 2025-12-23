@@ -5,7 +5,6 @@ use std::fs;
 use eyre::eyre;
 use eyre::Context;
 use eyre::OptionExt;
-use frost_core::Signature;
 
 use crate::cipher::PublicKey;
 use crate::coordinator::comms::http::HTTPComms;
@@ -52,13 +51,17 @@ pub struct CoordinatorCommand {
     /// more are passed, the number should match the `message` parameter.
     #[arg(short = 'r', long)]
     pub randomizer: Vec<String>,
-    /// Where to write the generated raw bytes signature. If "-", the
-    /// human-readable hex-string is printed to stdout.
+    /// An optional auxiliary message to include in the signing package.
+    #[arg(short = 'a', long)]
+    pub aux_message: Option<String>,
+    /// Where to write the generated raw bytes signatures. Each instance can be
+    /// a file path where the raw signature will be written, or "-". If "-" is
+    /// specified, the human-readable hex-string is printed to stdout.
     #[arg(short = 'o', long, default_value = "")]
-    pub signature: String,
+    pub signature: Vec<String>,
 }
 
-pub async fn run(args: &Command) -> Result<Vec<u8>, Box<dyn Error>> {
+pub async fn run(args: &Command) -> Result<(), Box<dyn Error>> {
     let Command::Coordinator(CoordinatorCommand { config, group, .. }) = (*args).clone() else {
         panic!("invalid Command");
     };
@@ -67,24 +70,20 @@ pub async fn run(args: &Command) -> Result<Vec<u8>, Box<dyn Error>> {
 
     let group = config.group.get(&group).ok_or_eyre("Group not found")?;
 
-    let signature = if group.ciphersuite == Ed25519Sha512::ID {
-        run_for_ciphersuite::<Ed25519Sha512>(args)
-            .await?
-            .serialize()?
+    if group.ciphersuite == Ed25519Sha512::ID {
+        run_for_ciphersuite::<Ed25519Sha512>(args).await?
     } else if group.ciphersuite == PallasBlake2b512::ID {
-        run_for_ciphersuite::<PallasBlake2b512>(args)
-            .await?
-            .serialize()?
+        run_for_ciphersuite::<PallasBlake2b512>(args).await?
     } else {
         return Err(eyre!("unsupported ciphersuite").into());
     };
 
-    Ok(signature)
+    Ok(())
 }
 
 pub(crate) async fn run_for_ciphersuite<C: RandomizedCiphersuite + 'static>(
     args: &Command,
-) -> Result<Signature<C>, Box<dyn Error>> {
+) -> Result<(), Box<dyn Error>> {
     let Command::Coordinator(CoordinatorCommand {
         config,
         server_url,
@@ -93,6 +92,7 @@ pub(crate) async fn run_for_ciphersuite<C: RandomizedCiphersuite + 'static>(
         message,
         randomizer,
         signature: signature_fn,
+        aux_message,
     }) = (*args).clone()
     else {
         panic!("invalid Command");
@@ -115,6 +115,10 @@ pub(crate) async fn run_for_ciphersuite<C: RandomizedCiphersuite + 'static>(
     let server_url_parsed =
         Url::parse(&format!("https://{server_url}")).wrap_err("error parsing server-url")?;
 
+    if message.len() != signature_fn.len() {
+        return Err("Number of messages must match number of signature output files".into());
+    }
+
     let signers = signers
         .iter()
         .map(|s| {
@@ -130,6 +134,9 @@ pub(crate) async fn run_for_ciphersuite<C: RandomizedCiphersuite + 'static>(
         public_key_package,
         messages: args::read_messages(&message, &mut output, &mut input)?,
         randomizers: args::read_randomizers(&randomizer, &mut output, &mut input)?,
+        aux_msg: aux_message
+            .map(|filename| args::read_aux_message(&filename, &mut output, &mut input))
+            .transpose()?,
     };
 
     let args = crate::coordinator::comms::http::Args {
@@ -160,14 +167,17 @@ pub(crate) async fn run_for_ciphersuite<C: RandomizedCiphersuite + 'static>(
 
     let mut comms = HTTPComms::new(&pargs, &args)?;
 
-    let signature = cli::coordinator(&mut comms, pargs).await?;
+    let signatures = cli::coordinator(&mut comms, pargs).await?;
 
-    let serialized_signature = signature.serialize()?;
-    if signature_fn.is_empty() || signature_fn == "-" {
-        println!("{}", hex::encode(&serialized_signature));
-    } else {
-        fs::write(&signature_fn, &serialized_signature)?;
-        eprintln!("Raw signature written to {}", &signature_fn);
+    for (signature, signature_fn) in signatures.iter().zip(signature_fn.iter()) {
+        if signature_fn == "-" || signature_fn.is_empty() {
+            let hex_signature = hex::encode(signature.serialize()?);
+            eprintln!("{hex_signature}");
+        } else {
+            fs::write(signature_fn, signature.serialize()?)?;
+            eprintln!("Raw signature written to {}", signature_fn);
+        }
     }
-    Ok(signature)
+
+    Ok(())
 }

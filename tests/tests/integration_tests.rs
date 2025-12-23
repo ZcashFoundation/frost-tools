@@ -167,7 +167,7 @@ async fn trusted_dealer_journey() {
         let signature = generate_signature(
             round_2_config,
             &key_packages[&participant_identifier],
-            &nonces_map[&participant_identifier],
+            &[nonces_map[&participant_identifier].clone()],
         )
         .unwrap();
         signature_shares.insert(participant_identifier, signature);
@@ -177,9 +177,9 @@ async fn trusted_dealer_journey() {
 
     let mut step_3_input = Cursor::new(format!(
         "{}\n{}\n{}\n",
-        serde_json::to_string(&signature_shares[&participant_id_1]).unwrap(),
-        serde_json::to_string(&signature_shares[&participant_id_2]).unwrap(),
-        serde_json::to_string(&signature_shares[&participant_id_3]).unwrap()
+        serde_json::to_string(&signature_shares[&participant_id_1][0]).unwrap(),
+        serde_json::to_string(&signature_shares[&participant_id_2][0]).unwrap(),
+        serde_json::to_string(&signature_shares[&participant_id_3][0]).unwrap()
     ));
     // We recreate coordinator_comms to be able to provide new input
     let mut coordinator_comms = CoordinatorCLIComms::new(&mut step_3_input, &mut buf);

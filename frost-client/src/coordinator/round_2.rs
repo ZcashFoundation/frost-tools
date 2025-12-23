@@ -37,8 +37,13 @@ async fn request_inputs_signature_shares<C: RandomizedCiphersuite + 'static>(
         Some(args.randomizers[0])
     };
 
+    let randomizer_vec = randomizer.map(|r| vec![r]);
     let signatures_list = comms
-        .send_signing_package_and_get_signature_shares(signing_package, randomizer)
+        .send_signing_package_and_get_signature_shares(
+            std::slice::from_ref(signing_package),
+            randomizer_vec.as_deref(),
+            None,
+        )
         .await?;
 
     let group_signature = if let Some(randomizer) = randomizer {
@@ -49,7 +54,7 @@ async fn request_inputs_signature_shares<C: RandomizedCiphersuite + 'static>(
 
         frost_rerandomized::aggregate(
             signing_package,
-            &signatures_list,
+            &signatures_list[0],
             &participants.pub_key_package,
             &randomizer_params,
         )
@@ -57,13 +62,13 @@ async fn request_inputs_signature_shares<C: RandomizedCiphersuite + 'static>(
     } else {
         frost::aggregate::<C>(
             signing_package,
-            &signatures_list,
+            &signatures_list[0],
             &participants.pub_key_package,
         )
         .unwrap()
     };
 
-    comms.process_signature(&group_signature).await?;
+    comms.process_signature(&[group_signature]).await?;
 
     Ok(group_signature)
 }

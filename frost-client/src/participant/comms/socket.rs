@@ -83,14 +83,27 @@ impl<C> Comms<C> for SocketComms<C>
 where
     C: Ciphersuite + 'static,
 {
+    async fn get_message_count(
+        &mut self,
+        _input: &mut dyn BufRead,
+        _output: &mut dyn Write,
+    ) -> Result<u8, Box<dyn Error>> {
+        // TODO: support more
+        Ok(1)
+    }
+
     async fn get_signing_package(
         &mut self,
         _input: &mut dyn BufRead,
         _output: &mut dyn Write,
-        commitments: SigningCommitments<C>,
+        commitments: &[SigningCommitments<C>],
         identifier: Identifier<C>,
         _rerandomized: bool,
     ) -> Result<SendSigningPackageArgs<C>, Box<dyn Error>> {
+        if commitments.len() != 1 {
+            panic!("SocketComms currently only supports one message at a time");
+        }
+        let commitments = commitments[0];
         // Send Commitments to Coordinator
         let data = serde_json::to_vec(&Message::<C>::IdentifiedCommitments {
             identifier,
@@ -124,8 +137,9 @@ where
     async fn send_signature_share(
         &mut self,
         _identifier: Identifier<C>,
-        signature_share: SignatureShare<C>,
+        signature_shares: &[SignatureShare<C>],
     ) -> Result<(), Box<dyn Error>> {
+        let signature_share = signature_shares[0];
         // Send signature shares to Coordinator
         let data = serde_json::to_vec(&Message::SignatureShare(signature_share))?;
         self.handler.network().send(self.endpoint, &data);

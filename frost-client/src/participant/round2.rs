@@ -27,28 +27,33 @@ pub async fn round_2_request_inputs<C: Ciphersuite>(
     rerandomized: bool,
 ) -> Result<SendSigningPackageArgs<C>, Box<dyn std::error::Error>> {
     comms
-        .get_signing_package(input, logger, commitments, identifier, rerandomized)
+        .get_signing_package(input, logger, &[commitments], identifier, rerandomized)
         .await
 }
 
 pub fn generate_signature<C: frost_rerandomized::RandomizedCiphersuite>(
     config: SendSigningPackageArgs<C>,
     key_package: &KeyPackage<C>,
-    signing_nonces: &SigningNonces<C>,
-) -> Result<SignatureShare<C>, Error<C>> {
-    let signing_package = config.signing_package.first().unwrap();
-
-    let signature = if !config.randomizer.is_empty() {
-        frost_rerandomized::sign::<C>(
-            signing_package,
-            signing_nonces,
-            key_package,
-            config.randomizer[0],
-        )?
-    } else {
-        round2::sign(signing_package, signing_nonces, key_package)?
-    };
-    Ok(signature)
+    signing_nonces: &[SigningNonces<C>],
+) -> Result<Vec<SignatureShare<C>>, Error<C>> {
+    let signatures = config
+        .signing_package
+        .iter()
+        .zip(signing_nonces.iter())
+        .map(|(signing_package, signing_nonces)| {
+            if !config.randomizer.is_empty() {
+                frost_rerandomized::sign::<C>(
+                    signing_package,
+                    signing_nonces,
+                    key_package,
+                    config.randomizer[0],
+                )
+            } else {
+                round2::sign(signing_package, signing_nonces, key_package)
+            }
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(signatures)
 }
 
 pub fn print_values_round_2<C: Ciphersuite>(

@@ -78,9 +78,10 @@ impl<C: Ciphersuite> HTTPComms<C> {
 impl<C: Ciphersuite + 'static> Comms<C> for HTTPComms<C> {
     async fn get_signing_commitments(
         &mut self,
-        _pub_key_package: &PublicKeyPackage<C>,
-        _num_signers: u16,
-    ) -> Result<BTreeMap<Identifier<C>, SigningCommitments<C>>, Box<dyn Error>> {
+        _public_key_package: &PublicKeyPackage<C>,
+        _num_participants: u16,
+        num_messages: usize,
+    ) -> Result<Vec<BTreeMap<Identifier<C>, SigningCommitments<C>>>, Box<dyn Error>> {
         let mut rng = thread_rng();
 
         eprintln!("Logging in...");
@@ -110,7 +111,7 @@ impl<C: Ciphersuite + 'static> Comms<C> for HTTPComms<C> {
             .client
             .create_new_session(&api::CreateNewSessionArgs {
                 pubkeys: self.args.signers.keys().cloned().collect(),
-                message_count: 1,
+                message_count: num_messages as u8,
             })
             .await?;
 
@@ -125,8 +126,6 @@ impl<C: Ciphersuite + 'static> Comms<C> for HTTPComms<C> {
         let Some(comm_privkey) = &self.args.comm_privkey else {
             return Err(eyre!("comm_privkey must be specified").into());
         };
-
-        // If encryption is enabled, create the Noise objects
 
         let mut cipher = Cipher::new(
             comm_privkey.clone(),
@@ -160,28 +159,28 @@ impl<C: Ciphersuite + 'static> Comms<C> for HTTPComms<C> {
         let (commitments, pubkeys) = self.state.commitments()?;
         self.pubkeys = pubkeys;
 
-        // TODO: support more than 1
-        Ok(commitments[0].clone())
+        Ok(commitments.clone())
     }
 
     async fn send_signing_package_and_get_signature_shares(
         &mut self,
-        signing_package: &SigningPackage<C>,
-        randomizer: Option<frost_rerandomized::Randomizer<C>>,
-    ) -> Result<BTreeMap<Identifier<C>, SignatureShare<C>>, Box<dyn Error>> {
+        signing_packages: &[SigningPackage<C>],
+        randomizers: Option<&[frost_rerandomized::Randomizer<C>]>,
+        aux_msg: Option<Vec<u8>>,
+    ) -> Result<Vec<BTreeMap<Identifier<C>, SignatureShare<C>>>, Box<dyn Error>> {
         eprintln!("Sending SigningPackage to participants...");
         let cipher = self
             .cipher
             .as_mut()
             .expect("cipher must have been set before");
         let send_signing_package_args = SendSigningPackageArgs {
-            signing_package: vec![signing_package.clone()],
-            aux_msg: Default::default(),
-            randomizer: randomizer.map(|r| vec![r]).unwrap_or_default(),
+            signing_package: signing_packages.to_vec(),
+            aux_msg: aux_msg.unwrap_or_default(),
+            randomizer: randomizers.map(|r| r.to_vec()).unwrap_or_default(),
         };
         // We need to send a message separately for each recipient even if the
-        // message is the same, because they are (possibly) encrypted
-        // individually for each recipient.
+        // message is the same, because they are encrypted individually for each
+        // recipient.
         let pubkeys: Vec<_> = self.pubkeys.keys().cloned().collect();
         for recipient in pubkeys {
             let msg = cipher.encrypt(
@@ -232,10 +231,13 @@ impl<C: Ciphersuite + 'static> Comms<C> for HTTPComms<C> {
         let signature_shares = self.state.signature_shares()?;
 
         // TODO: support more than 1
-        Ok(signature_shares[0].clone())
+        Ok(signature_shares)
     }
 
-    async fn process_signature(&mut self, _signature: &Signature<C>) -> Result<(), Box<dyn Error>> {
+    async fn process_signature(
+        &mut self,
+        _signatures: &[Signature<C>],
+    ) -> Result<(), Box<dyn Error>> {
         Ok(())
     }
 

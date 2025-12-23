@@ -132,14 +132,11 @@ impl<C> Comms<C> for HTTPComms<C>
 where
     C: Ciphersuite + 'static,
 {
-    async fn get_signing_package(
+    async fn get_message_count(
         &mut self,
         _input: &mut dyn BufRead,
         _output: &mut dyn Write,
-        commitments: SigningCommitments<C>,
-        _identifier: Identifier<C>,
-        _rerandomized: bool,
-    ) -> Result<SendSigningPackageArgs<C>, Box<dyn Error>> {
+    ) -> Result<u8, Box<dyn Error>> {
         let mut rng = thread_rng();
 
         eprintln!("Logging in...");
@@ -204,11 +201,23 @@ where
 
         let cipher = Cipher::new(comm_privkey.clone(), vec![comm_coordinator_pubkey.clone()])?;
         self.cipher = Some(cipher);
-        let cipher = self.cipher.as_mut().expect("was just set");
+        Ok(session_info.message_count)
+    }
+
+    async fn get_signing_package(
+        &mut self,
+        _input: &mut dyn BufRead,
+        _output: &mut dyn Write,
+        commitments: &[SigningCommitments<C>],
+        _identifier: Identifier<C>,
+        _rerandomized: bool,
+    ) -> Result<SendSigningPackageArgs<C>, Box<dyn Error>> {
+        let cipher = self.cipher.as_mut().expect("was previously set");
+        let session_id = self.session_id.expect("was previously set");
 
         // Send Commitments to Server
         eprintln!("Sending commitments to coordinator...");
-        let send_commitments_args = vec![commitments];
+        let send_commitments_args = commitments;
         let msg = cipher.encrypt(None, serde_json::to_vec(&send_commitments_args)?)?;
         self.client
             .send(&api::SendArgs {
@@ -247,7 +256,7 @@ where
     async fn send_signature_share(
         &mut self,
         _identifier: Identifier<C>,
-        signature_share: SignatureShare<C>,
+        signature_shares: &[SignatureShare<C>],
     ) -> Result<(), Box<dyn Error>> {
         let cipher = self.cipher.as_mut().expect("was just set");
 
@@ -255,7 +264,7 @@ where
 
         eprintln!("Sending signature share to coordinator...");
 
-        let send_signature_shares_args = vec![signature_share];
+        let send_signature_shares_args = signature_shares.to_vec();
 
         let msg = cipher.encrypt(None, serde_json::to_vec(&send_signature_shares_args)?)?;
 
