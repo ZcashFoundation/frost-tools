@@ -1,6 +1,7 @@
 use frost_client::coordinator::args::Args as CoordinatorArgs;
 use frost_client::coordinator::args::ProcessedArgs;
 use frost_client::coordinator::comms::cli::CLIComms as CoordinatorCLIComms;
+use frost_client::coordinator::comms::Comms as CoordinatorComms;
 
 use frost_client::participant::args::Args as ParticipantArgs;
 use frost_client::participant::comms::cli::CLIComms as ParticipantCLIComms;
@@ -131,21 +132,21 @@ async fn trusted_dealer_journey() {
 
     let mut coordinator_comms = CoordinatorCLIComms::new(&mut input, &mut buf);
 
-    let participants_config = frost_client::coordinator::round_1::get_commitments(
-        &pcoordinator_args,
-        &mut coordinator_comms,
-    )
-    .await
-    .unwrap();
+    let commitments_list = coordinator_comms
+        .get_signing_commitments(
+            &pcoordinator_args.public_key_package,
+            pcoordinator_args.num_signers,
+            1,
+        )
+        .await
+        .unwrap();
 
     // Coordinator step 2
 
     let mut signature_shares = HashMap::new();
 
-    let signing_package = frost_client::coordinator::cli::build_signing_package(
-        &pcoordinator_args,
-        commitments_map.clone(),
-    );
+    let signing_package =
+        frost::SigningPackage::new(commitments_list[0].clone(), &pcoordinator_args.messages[0]);
 
     // Round 2
     let mut buf = BufWriter::new(Vec::new());
@@ -184,13 +185,20 @@ async fn trusted_dealer_journey() {
     // We recreate coordinator_comms to be able to provide new input
     let mut coordinator_comms = CoordinatorCLIComms::new(&mut step_3_input, &mut buf);
 
-    let group_signature =
-        frost_client::coordinator::round_2::send_signing_package_and_get_signature_shares(
-            &pcoordinator_args,
-            &mut coordinator_comms,
-            participants_config,
-            &signing_package,
+    let signature_shares_list = coordinator_comms
+        .send_signing_package_and_get_signature_shares(
+            std::slice::from_ref(&signing_package),
+            None,
+            None,
         )
+        .await
+        .unwrap();
+
+    let group_signature =
+        frost::aggregate(&signing_package, &signature_shares_list[0], &pubkeys).unwrap();
+
+    coordinator_comms
+        .process_signature(&[group_signature])
         .await
         .unwrap();
 
