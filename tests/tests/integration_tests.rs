@@ -5,6 +5,8 @@ use frost_client::coordinator::comms::Comms as CoordinatorComms;
 
 use frost_client::participant::args::Args as ParticipantArgs;
 use frost_client::participant::comms::cli::CLIComms as ParticipantCLIComms;
+use frost_client::participant::comms::Comms as ParticipantComms;
+use frost_client::participant::input::read_from_file_or_stdin;
 
 use frost_ed25519 as frost;
 
@@ -22,10 +24,28 @@ use rand::thread_rng;
 use frost_client::trusted_dealer::inputs::request_inputs as trusted_dealer_input;
 use frost_client::trusted_dealer::trusted_dealer_keygen::trusted_dealer_keygen;
 
-use frost_client::participant::round2::round_2_request_inputs as participant_input_round_2;
-use frost_client::participant::{
-    round1::request_inputs as participant_input_round_1, round2::generate_signature,
-};
+use frost_client::participant::cli::generate_signature;
+
+async fn request_inputs(
+    args: &ParticipantArgs,
+    input: &mut impl std::io::BufRead,
+    logger: &mut impl std::io::Write,
+) -> Result<frost::keys::KeyPackage, Box<dyn std::error::Error>> {
+    use frost::keys::{KeyPackage, SecretShare};
+
+    writeln!(logger, "Your JSON-encoded secret share or key package:")?;
+
+    let secret_share = read_from_file_or_stdin(input, logger, "key package", &args.key_package)?;
+
+    let key_package = if let Ok(secret_share) = serde_json::from_str::<SecretShare>(&secret_share) {
+        KeyPackage::try_from(secret_share)?
+    } else {
+        serde_json::from_str::<KeyPackage>(&secret_share)
+            .map_err(|_| frost::Error::InvalidSecretShare { culprit: None })?
+    };
+
+    Ok(key_package)
+}
 
 #[tokio::test]
 async fn trusted_dealer_journey() {
@@ -94,15 +114,13 @@ async fn trusted_dealer_journey() {
             "{}\n",
             &serde_json::to_string(&key_packages[&participant_identifier]).unwrap()
         );
-        let round_1_config =
-            participant_input_round_1(&participant_args, &mut round_1_input.as_bytes(), &mut buf)
+
+        let key_package =
+            request_inputs(&participant_args, &mut round_1_input.as_bytes(), &mut buf)
                 .await
                 .unwrap();
 
-        assert_eq!(
-            round_1_config.key_package,
-            key_packages[&participant_identifier]
-        );
+        assert_eq!(key_package, key_packages[&participant_identifier]);
 
         let (nonces, commitments) = frost::round1::commit(share, &mut rng);
 
@@ -155,16 +173,16 @@ async fn trusted_dealer_journey() {
         let participant_identifier = Identifier::try_from(participant_index).unwrap();
         let signing_commitments = commitments_map[&participant_identifier];
         let round_2_input = format!("{}\n", serde_json::to_string(&signing_package).unwrap());
-        let round_2_config = participant_input_round_2(
-            &mut participant_comms,
-            &mut round_2_input.as_bytes(),
-            &mut buf,
-            signing_commitments,
-            participant_identifier,
-            false,
-        )
-        .await
-        .unwrap();
+        let round_2_config = participant_comms
+            .get_signing_package(
+                &mut round_2_input.as_bytes(),
+                &mut buf,
+                &[signing_commitments],
+                participant_identifier,
+                false,
+            )
+            .await
+            .unwrap();
         let signature = generate_signature(
             round_2_config,
             &key_packages[&participant_identifier],

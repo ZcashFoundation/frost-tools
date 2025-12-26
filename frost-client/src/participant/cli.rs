@@ -6,16 +6,60 @@ use super::comms::socket::SocketComms;
 
 use super::comms::Comms;
 
-use super::round2::{generate_signature, print_values_round_2};
-
+use crate::api::SendSigningPackageArgs;
 use frost_core::Ciphersuite;
 use frost_core::{self as frost};
+use frost_core::{
+    keys::KeyPackage,
+    round1::SigningNonces,
+    round2::{self, SignatureShare},
+    Error,
+};
 use frost_ed25519::Ed25519Sha512;
 use frost_rerandomized::RandomizedCiphersuite;
 use rand::thread_rng;
 use reddsa::frost::redpallas::PallasBlake2b512;
 use std::io::{BufRead, Write};
 use zeroize::Zeroizing;
+
+pub fn generate_signature<C: frost_rerandomized::RandomizedCiphersuite>(
+    config: SendSigningPackageArgs<C>,
+    key_package: &KeyPackage<C>,
+    signing_nonces: &[SigningNonces<C>],
+) -> Result<Vec<SignatureShare<C>>, Error<C>> {
+    let signatures = config
+        .signing_package
+        .iter()
+        .zip(signing_nonces.iter())
+        .map(|(signing_package, signing_nonces)| {
+            if !config.randomizer.is_empty() {
+                frost_rerandomized::sign::<C>(
+                    signing_package,
+                    signing_nonces,
+                    key_package,
+                    config.randomizer[0],
+                )
+            } else {
+                round2::sign(signing_package, signing_nonces, key_package)
+            }
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(signatures)
+}
+
+pub fn print_values_round_2<C: Ciphersuite>(
+    signature: SignatureShare<C>,
+    logger: &mut dyn Write,
+) -> Result<(), Box<dyn std::error::Error>> {
+    writeln!(logger, "Please send the following to the Coordinator")?;
+    writeln!(
+        logger,
+        "SignatureShare:\n{}",
+        serde_json::to_string(&signature).unwrap()
+    )?;
+
+    Ok(())
+}
 
 pub async fn cli<C: RandomizedCiphersuite + 'static>(
     args: &Args,

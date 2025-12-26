@@ -6,10 +6,7 @@ use frost_core::Ciphersuite;
 
 use async_trait::async_trait;
 
-use crate::{
-    api::{self, SendSigningPackageArgs},
-    participant::round1::print_values,
-};
+use crate::api::{self, SendSigningPackageArgs};
 use frost::{
     keys::PublicKeyPackage, round1::SigningCommitments, round2::SignatureShare, Identifier,
     SigningPackage,
@@ -22,6 +19,26 @@ use std::{
 };
 
 use super::Comms;
+
+pub fn print_values<C: Ciphersuite>(
+    commitments: SigningCommitments<C>,
+    logger: &mut dyn Write,
+) -> Result<(), Box<dyn std::error::Error>> {
+    writeln!(logger, "=== Round 1 ===")?;
+    writeln!(logger, "SigningNonces were generated and stored in memory")?;
+    writeln!(
+        logger,
+        "SigningCommitments:\n{}",
+        serde_json::to_string(&commitments).unwrap(),
+    )?;
+    writeln!(logger, "=== Round 1 Completed ===")?;
+    writeln!(
+        logger,
+        "Please send your SigningCommitments to the coordinator"
+    )?;
+
+    Ok(())
+}
 
 #[derive(Default)]
 pub struct CLIComms<C: Ciphersuite> {
