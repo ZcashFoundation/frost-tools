@@ -40,39 +40,36 @@ pub fn print_values<C: Ciphersuite>(
     Ok(())
 }
 
-#[derive(Default)]
-pub struct CLIComms<C: Ciphersuite> {
+pub struct CLIComms<'a, C: Ciphersuite> {
+    input: &'a mut dyn BufRead,
+    output: &'a mut dyn Write,
     _phantom: PhantomData<C>,
 }
 
-impl<C> CLIComms<C>
+impl<'a, C> CLIComms<'a, C>
 where
     C: Ciphersuite,
 {
-    pub fn new() -> Self {
+    pub fn new(input: &'a mut dyn BufRead, output: &'a mut dyn Write) -> Self {
         Self {
+            input,
+            output,
             _phantom: Default::default(),
         }
     }
 }
 
 #[async_trait(?Send)]
-impl<C> Comms<C> for CLIComms<C>
+impl<'a, C> Comms<C> for CLIComms<'a, C>
 where
     C: Ciphersuite + 'static,
 {
-    async fn get_message_count(
-        &mut self,
-        _input: &mut dyn BufRead,
-        _output: &mut dyn Write,
-    ) -> Result<u8, Box<dyn Error>> {
+    async fn get_message_count(&mut self) -> Result<u8, Box<dyn Error>> {
         Ok(1)
     }
 
     async fn get_signing_package(
         &mut self,
-        input: &mut dyn BufRead,
-        output: &mut dyn Write,
         commitments: &[SigningCommitments<C>],
         _identifier: Identifier<C>,
         rerandomized: bool,
@@ -82,22 +79,22 @@ where
         }
         let commitments = commitments.first().expect("was just checked");
 
-        print_values(*commitments, output)?;
+        print_values(*commitments, &mut self.output)?;
 
-        writeln!(output, "Enter the JSON-encoded SigningPackage:")?;
+        writeln!(&mut self.output, "Enter the JSON-encoded SigningPackage:")?;
 
         let mut signing_package_json = String::new();
 
-        input.read_line(&mut signing_package_json)?;
+        self.input.read_line(&mut signing_package_json)?;
 
         // TODO: change to return a generic Error and use a better error
         let signing_package: SigningPackage<C> = serde_json::from_str(signing_package_json.trim())?;
 
         if rerandomized {
-            writeln!(output, "Enter the randomizer (hex string):")?;
+            writeln!(&mut self.output, "Enter the randomizer (hex string):")?;
 
             let mut json = String::new();
-            input.read_line(&mut json).unwrap();
+            self.input.read_line(&mut json).unwrap();
 
             let randomizer =
                 frost_rerandomized::Randomizer::<C>::deserialize(&hex::decode(json.trim())?)?;
@@ -120,10 +117,46 @@ where
     async fn send_signature_share(
         &mut self,
         _identifier: Identifier<C>,
-        _signature_shares: &[SignatureShare<C>],
+        signature_shares: &[SignatureShare<C>],
     ) -> Result<(), Box<dyn Error>> {
+        for signature_share in signature_shares {
+            print_values_round_2(*signature_share, &mut self.output)?;
+        }
         Ok(())
     }
+
+    async fn confirm_message(
+        &mut self,
+        signing_package: &SendSigningPackageArgs<C>,
+    ) -> Result<(), Box<dyn Error>> {
+        for signing_package in &signing_package.signing_package {
+            writeln!(
+                &mut self.output,
+                "Message to be signed (hex-encoded):\n{}\nDo you want to sign it? (y/n)",
+                hex::encode(signing_package.message())
+            )?;
+            let mut sign_it = String::new();
+            self.input.read_line(&mut sign_it)?;
+            if sign_it.trim() != "y" {
+                return Err(eyre::eyre!("signing cancelled").into());
+            }
+        }
+        Ok(())
+    }
+}
+
+pub fn print_values_round_2<C: Ciphersuite>(
+    signature: SignatureShare<C>,
+    logger: &mut dyn Write,
+) -> Result<(), Box<dyn std::error::Error>> {
+    writeln!(logger, "Please send the following to the Coordinator")?;
+    writeln!(
+        logger,
+        "SignatureShare:\n{}",
+        serde_json::to_string(&signature).unwrap()
+    )?;
+
+    Ok(())
 }
 
 pub fn read_identifier<C: Ciphersuite + 'static>(

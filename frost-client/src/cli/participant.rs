@@ -15,7 +15,8 @@ use frost_rerandomized::RandomizedCiphersuite;
 use super::{args::Command, config::Config};
 
 use crate::participant::args;
-use crate::participant::cli::cli_for_processed_args;
+use crate::participant::cli::participant;
+use crate::participant::comms::http::HTTPComms;
 
 pub async fn run(args: &Command) -> Result<(), Box<dyn Error>> {
     let Command::Participant { config, group, .. } = (*args).clone() else {
@@ -54,9 +55,6 @@ pub(crate) async fn run_for_ciphersuite<C: RandomizedCiphersuite + 'static>(
 
     let key_package: KeyPackage<C> = postcard::from_bytes(&group.key_package)?;
 
-    let mut input = Box::new(std::io::stdin().lock());
-    let mut output = std::io::stdout();
-
     let server_url = if let Some(server_url) = server_url {
         server_url
     } else {
@@ -66,10 +64,10 @@ pub(crate) async fn run_for_ciphersuite<C: RandomizedCiphersuite + 'static>(
         Url::parse(&format!("https://{server_url}")).wrap_err("error parsing server-url")?;
 
     let group_participants = group.participant.clone();
-    let pargs = args::ProcessedArgs {
-        cli: false,
-        http: true,
-        key_package,
+
+    let pargs = args::ProcessedArgs { key_package };
+
+    let args = crate::participant::comms::http::Args {
         ip: server_url_parsed
             .host_str()
             .ok_or_eyre("host missing in URL")?
@@ -101,7 +99,9 @@ pub(crate) async fn run_for_ciphersuite<C: RandomizedCiphersuite + 'static>(
         })),
     };
 
-    cli_for_processed_args(pargs, &mut input, &mut output).await?;
+    let mut comms = HTTPComms::new(&args)?;
+
+    participant(&mut comms, pargs).await?;
 
     Ok(())
 }

@@ -14,13 +14,8 @@ use tokio::sync::mpsc::{self, Receiver, Sender};
 
 use frost::{round1::SigningCommitments, round2::SignatureShare, Identifier};
 
-use std::{
-    error::Error,
-    io::{BufRead, Write},
-    marker::PhantomData,
-};
+use std::{error::Error, io::stdin, marker::PhantomData};
 
-use super::super::args::ProcessedArgs;
 use super::{Comms, Message};
 
 pub struct SocketComms<C: Ciphersuite> {
@@ -34,9 +29,9 @@ impl<C> SocketComms<C>
 where
     C: Ciphersuite,
 {
-    pub fn new(args: &ProcessedArgs<C>) -> Self {
+    pub fn new(ip: String, port: String) -> Self {
         let (handler, listener) = node::split::<()>();
-        let addr = format!("{}:{}", args.ip, args.port);
+        let addr = format!("{}:{}", ip, port);
         let (tx, rx) = mpsc::channel(2000); // Don't need to receive the endpoint. Change this
 
         let (endpoint, _addr) = handler
@@ -83,19 +78,13 @@ impl<C> Comms<C> for SocketComms<C>
 where
     C: Ciphersuite + 'static,
 {
-    async fn get_message_count(
-        &mut self,
-        _input: &mut dyn BufRead,
-        _output: &mut dyn Write,
-    ) -> Result<u8, Box<dyn Error>> {
+    async fn get_message_count(&mut self) -> Result<u8, Box<dyn Error>> {
         // TODO: support more
         Ok(1)
     }
 
     async fn get_signing_package(
         &mut self,
-        _input: &mut dyn BufRead,
-        _output: &mut dyn Write,
         commitments: &[SigningCommitments<C>],
         identifier: Identifier<C>,
         _rerandomized: bool,
@@ -144,6 +133,25 @@ where
         let data = serde_json::to_vec(&Message::SignatureShare(signature_share))?;
         self.handler.network().send(self.endpoint, &data);
 
+        Ok(())
+    }
+
+    async fn confirm_message(
+        &mut self,
+        signing_package: &SendSigningPackageArgs<C>,
+    ) -> Result<(), Box<dyn Error>> {
+        // TODO: replace with callback
+        for signing_package in &signing_package.signing_package {
+            eprintln!(
+                "Message to be signed (hex-encoded):\n{}\nDo you want to sign it? (y/n)",
+                hex::encode(signing_package.message())
+            );
+            let mut sign_it = String::new();
+            stdin().read_line(&mut sign_it)?;
+            if sign_it.trim() != "y" {
+                return Err(eyre::eyre!("signing cancelled").into());
+            }
+        }
         Ok(())
     }
 }
