@@ -13,9 +13,9 @@ use frost::{
 };
 use frostd::SendSigningPackageArgs;
 use hex::FromHex;
+use participant::cli::generate_signature;
+use participant::cli::print_values_round_2;
 use participant::comms::cli::CLIComms;
-use participant::round2::print_values_round_2;
-use participant::round2::{generate_signature, Round2Config};
 use rand::thread_rng;
 
 const PUBLIC_KEY: &str = "adf6ab1f882d04988eadfaa52fb175bf37b6247785d7380fde3fb9d68032470d";

@@ -1,11 +1,8 @@
 //! HTTP implementation of the Comms trait.
 
-use std::{
-    error::Error,
-    io::{BufRead, Write},
-    marker::PhantomData,
-    time::Duration,
-};
+use std::io::stdin;
+use std::rc::Rc;
+use std::{error::Error, marker::PhantomData, time::Duration};
 
 use async_trait::async_trait;
 use eyre::{eyre, OptionExt};
@@ -13,11 +10,10 @@ use frost_core::{round1::SigningCommitments, round2::SignatureShare, Ciphersuite
 use rand::thread_rng;
 use snow::{HandshakeState, TransportState};
 
-use crate::api::{self, SendSigningPackageArgs, Uuid};
-use crate::cipher::Cipher;
+use crate::api::{self, PublicKey, SendSigningPackageArgs, Uuid};
+use crate::cipher::{Cipher, PrivateKey};
 use crate::client::Client;
 
-use super::super::args::ProcessedArgs;
 use super::Comms;
 
 /// A Noise state.
@@ -101,11 +97,39 @@ impl Noise {
     }
 }
 
+#[derive(Clone)]
+pub struct Args {
+    /// IP to bind to, if using socket comms.
+    /// IP to connect to, if using HTTP mode.
+    pub ip: String,
+
+    /// Port to bind to, if using socket comms.
+    /// Port to connect to, if using HTTP mode.
+    pub port: u16,
+
+    /// Optional Session ID
+    pub session_id: String,
+
+    /// The participant's communication private key for HTTP mode.
+    pub comm_privkey: Option<PrivateKey>,
+
+    /// The participant's communication public key for HTTP mode.
+    pub comm_pubkey: Option<PublicKey>,
+
+    /// A function that confirms that a public key from the server is trusted by
+    /// the user; returns the same public key. For HTTP mode.
+    // It is a `Rc<dyn Fn>` to make it easier to use;
+    // using `fn()` would preclude using closures and using generics would
+    // require a lot of code change for something simple.
+    #[allow(clippy::type_complexity)]
+    pub comm_coordinator_pubkey_getter: Option<Rc<dyn Fn(&PublicKey) -> Option<PublicKey>>>,
+}
+
 pub struct HTTPComms<C: Ciphersuite> {
     client: Client,
     session_id: Option<Uuid>,
     access_token: Option<String>,
-    args: ProcessedArgs<C>,
+    args: Args,
     cipher: Option<Cipher>,
     _phantom: PhantomData<C>,
 }
@@ -115,7 +139,7 @@ impl<C> HTTPComms<C>
 where
     C: Ciphersuite,
 {
-    pub fn new(args: &ProcessedArgs<C>) -> Result<Self, Box<dyn Error>> {
+    pub fn new(args: &Args) -> Result<Self, Box<dyn Error>> {
         Ok(Self {
             client: Client::new(format!("https://{}:{}", args.ip, args.port)),
             session_id: Uuid::parse_str(&args.session_id).ok(),
@@ -132,11 +156,7 @@ impl<C> Comms<C> for HTTPComms<C>
 where
     C: Ciphersuite + 'static,
 {
-    async fn get_message_count(
-        &mut self,
-        _input: &mut dyn BufRead,
-        _output: &mut dyn Write,
-    ) -> Result<u8, Box<dyn Error>> {
+    async fn get_message_count(&mut self) -> Result<u8, Box<dyn Error>> {
         let mut rng = thread_rng();
 
         eprintln!("Logging in...");
@@ -206,8 +226,6 @@ where
 
     async fn get_signing_package(
         &mut self,
-        _input: &mut dyn BufRead,
-        _output: &mut dyn Write,
         commitments: &[SigningCommitments<C>],
         _identifier: Identifier<C>,
         _rerandomized: bool,
@@ -280,6 +298,25 @@ where
 
         let _r = self.client.logout().await?;
 
+        Ok(())
+    }
+
+    async fn confirm_message(
+        &mut self,
+        signing_package: &SendSigningPackageArgs<C>,
+    ) -> Result<(), Box<dyn Error>> {
+        // TODO: replace with callback
+        for signing_package in &signing_package.signing_package {
+            eprintln!(
+                "Message to be signed (hex-encoded):\n{}\nDo you want to sign it? (y/n)",
+                hex::encode(signing_package.message())
+            );
+            let mut sign_it = String::new();
+            stdin().read_line(&mut sign_it)?;
+            if sign_it.trim() != "y" {
+                return Err(eyre::eyre!("signing cancelled").into());
+            }
+        }
         Ok(())
     }
 }

@@ -1,8 +1,6 @@
 use super::args::{Args, ProcessedArgs};
 
 use super::comms::cli::CLIComms;
-use super::comms::http::HTTPComms;
-use super::comms::socket::SocketComms;
 
 use super::comms::Comms;
 
@@ -47,19 +45,7 @@ pub fn generate_signature<C: frost_rerandomized::RandomizedCiphersuite>(
     Ok(signatures)
 }
 
-pub fn print_values_round_2<C: Ciphersuite>(
-    signature: SignatureShare<C>,
-    logger: &mut dyn Write,
-) -> Result<(), Box<dyn std::error::Error>> {
-    writeln!(logger, "Please send the following to the Coordinator")?;
-    writeln!(
-        logger,
-        "SignatureShare:\n{}",
-        serde_json::to_string(&signature).unwrap()
-    )?;
-
-    Ok(())
-}
+// Use implementations from participant::round2
 
 pub async fn cli<C: RandomizedCiphersuite + 'static>(
     args: &Args,
@@ -67,27 +53,19 @@ pub async fn cli<C: RandomizedCiphersuite + 'static>(
     logger: &mut impl Write,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let pargs = ProcessedArgs::<C>::new(args, reader, logger)?;
-    cli_for_processed_args(pargs, reader, logger).await
+    let mut comms = CLIComms::new(reader, logger);
+    participant(&mut comms, pargs).await
 }
 
-pub async fn cli_for_processed_args<C: RandomizedCiphersuite + 'static>(
+pub async fn participant<C: RandomizedCiphersuite + 'static>(
+    comms: &mut dyn Comms<C>,
     pargs: ProcessedArgs<C>,
-    input: &mut impl BufRead,
-    logger: &mut impl Write,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut comms: Box<dyn Comms<C>> = if pargs.cli {
-        Box::new(CLIComms::new())
-    } else if pargs.http {
-        Box::new(HTTPComms::new(&pargs)?)
-    } else {
-        Box::new(SocketComms::new(&pargs))
-    };
-
     // Round 1
 
     let key_package = &pargs.key_package;
 
-    let message_count = comms.get_message_count(input, logger).await?;
+    let message_count = comms.get_message_count().await?;
 
     let mut rng = thread_rng();
     let (nonces, commitments): (Vec<_>, Vec<_>) = (0..message_count)
@@ -106,31 +84,16 @@ pub async fn cli_for_processed_args<C: RandomizedCiphersuite + 'static>(
     };
 
     let round_2_config = comms
-        .get_signing_package(
-            input,
-            logger,
-            &commitments,
-            *key_package.identifier(),
-            rerandomized,
-        )
+        .get_signing_package(&commitments, *key_package.identifier(), rerandomized)
         .await?;
 
-    comms
-        .confirm_message(input, logger, &round_2_config)
-        .await?;
+    comms.confirm_message(&round_2_config).await?;
 
     let signatures = generate_signature(round_2_config, key_package, &nonces)?;
 
     comms
         .send_signature_share(*key_package.identifier(), &signatures)
         .await?;
-
-    if pargs.cli {
-        for signature in &signatures {
-            print_values_round_2(*signature, logger)?;
-        }
-    }
-    writeln!(logger, "Done")?;
 
     Ok(())
 }
