@@ -1,6 +1,5 @@
 //! HTTP implementation of the Comms trait.
 
-use std::io::stdin;
 use std::rc::Rc;
 use std::{error::Error, marker::PhantomData, time::Duration};
 
@@ -98,7 +97,7 @@ impl Noise {
 }
 
 #[derive(Clone)]
-pub struct Args {
+pub struct Args<C: Ciphersuite> {
     /// IP to bind to, if using socket comms.
     /// IP to connect to, if using HTTP mode.
     pub ip: String,
@@ -117,19 +116,24 @@ pub struct Args {
     pub comm_pubkey: Option<PublicKey>,
 
     /// A function that confirms that a public key from the server is trusted by
-    /// the user; returns the same public key. For HTTP mode.
+    /// the user; returns the same public key.
     // It is a `Rc<dyn Fn>` to make it easier to use;
     // using `fn()` would preclude using closures and using generics would
     // require a lot of code change for something simple.
     #[allow(clippy::type_complexity)]
     pub comm_coordinator_pubkey_getter: Option<Rc<dyn Fn(&PublicKey) -> Option<PublicKey>>>,
+
+    /// A callback to confirm the message to be signed, that must show the
+    /// message to the user and return true if they confirm signing.
+    #[allow(clippy::type_complexity)]
+    pub confirm_message_callback: Rc<dyn Fn(&SendSigningPackageArgs<C>) -> bool>,
 }
 
 pub struct HTTPComms<C: Ciphersuite> {
     client: Client,
     session_id: Option<Uuid>,
     access_token: Option<String>,
-    args: Args,
+    args: Args<C>,
     cipher: Option<Cipher>,
     _phantom: PhantomData<C>,
 }
@@ -139,7 +143,7 @@ impl<C> HTTPComms<C>
 where
     C: Ciphersuite,
 {
-    pub fn new(args: &Args) -> Result<Self, Box<dyn Error>> {
+    pub fn new(args: &Args<C>) -> Result<Self, Box<dyn Error>> {
         Ok(Self {
             client: Client::new(format!("https://{}:{}", args.ip, args.port)),
             session_id: Uuid::parse_str(&args.session_id).ok(),
@@ -305,17 +309,9 @@ where
         &mut self,
         signing_package: &SendSigningPackageArgs<C>,
     ) -> Result<(), Box<dyn Error>> {
-        // TODO: replace with callback
-        for signing_package in &signing_package.signing_package {
-            eprintln!(
-                "Message to be signed (hex-encoded):\n{}\nDo you want to sign it? (y/n)",
-                hex::encode(signing_package.message())
-            );
-            let mut sign_it = String::new();
-            stdin().read_line(&mut sign_it)?;
-            if sign_it.trim() != "y" {
-                return Err(eyre::eyre!("signing cancelled").into());
-            }
+        let confirmed = (self.args.confirm_message_callback)(signing_package);
+        if !confirmed {
+            return Err(eyre!("User did not confirm signing the message").into());
         }
         Ok(())
     }

@@ -27,4 +27,5 @@ zcash_keys = { workspace = true, features = ["test-dependencies", "orchard"] }
 zcash_primitives = { workspace = true }
 zcash_proofs = { workspace = true, features = ["bundled-prover"] }
 zcash_protocol = { workspace = true }
+zcash_script = "0.4.2"
 zcash_transparent = { workspace = true, features = ["transparent-inputs"] }

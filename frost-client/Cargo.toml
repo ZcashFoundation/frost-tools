@@ -53,3 +53,4 @@ thiserror = { workspace = true }
 zeroize = { workspace = true, features = ["serde", "zeroize_derive"] }
 message-io = { workspace = true }
 uuid = { workspace = true, features = ["v4", "fast-rng", "serde"] }
+zcash-sign = { workspace = true }

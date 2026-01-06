@@ -45,7 +45,7 @@ pub trait Comms<C: Ciphersuite> {
         &mut self,
         signing_packages: &[SigningPackage<C>],
         randomizers: Option<&[frost_rerandomized::Randomizer<C>]>,
-        aux_msg: Option<Vec<u8>>,
+        aux_msg: Option<&[u8]>,
     ) -> Result<Vec<BTreeMap<Identifier<C>, SignatureShare<C>>>, Box<dyn Error>>;
 
     async fn process_signature(

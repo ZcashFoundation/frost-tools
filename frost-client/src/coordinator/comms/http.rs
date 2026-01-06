@@ -166,7 +166,7 @@ impl<C: Ciphersuite + 'static> Comms<C> for HTTPComms<C> {
         &mut self,
         signing_packages: &[SigningPackage<C>],
         randomizers: Option<&[frost_rerandomized::Randomizer<C>]>,
-        aux_msg: Option<Vec<u8>>,
+        aux_msg: Option<&[u8]>,
     ) -> Result<Vec<BTreeMap<Identifier<C>, SignatureShare<C>>>, Box<dyn Error>> {
         eprintln!("Sending SigningPackage to participants...");
         let cipher = self
@@ -175,7 +175,7 @@ impl<C: Ciphersuite + 'static> Comms<C> for HTTPComms<C> {
             .expect("cipher must have been set before");
         let send_signing_package_args = SendSigningPackageArgs {
             signing_package: signing_packages.to_vec(),
-            aux_msg: aux_msg.unwrap_or_default(),
+            aux_msg: aux_msg.unwrap_or_default().to_vec(),
             randomizer: randomizers.map(|r| r.to_vec()).unwrap_or_default(),
         };
         // We need to send a message separately for each recipient even if the
