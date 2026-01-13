@@ -6,6 +6,8 @@ use frost_core::{self as frost, Ciphersuite, Signature};
 use frost_rerandomized::RandomizedCiphersuite;
 use itertools::izip;
 
+use crate::cli::coordinator::ParsedAuxMsg;
+
 use super::args::Args;
 use super::args::ProcessedArgs;
 use super::comms::cli::CLIComms;
@@ -52,11 +54,16 @@ pub async fn coordinator<C: RandomizedCiphersuite + 'static>(
             Some(pargs.randomizers)
         };
 
+        let aux_msg = postcard::to_allocvec(&ParsedAuxMsg {
+            content_type: pargs.content_type.as_str(),
+            data: pargs.aux_msg.as_deref(),
+        })?;
+
         let signature_shares = comms
             .send_signing_package_and_get_signature_shares(
                 &signing_packages,
                 randomizers.as_deref(),
-                pargs.aux_msg.clone(),
+                Some(&aux_msg),
             )
             .await?;
 

@@ -49,6 +49,10 @@ pub struct Args {
     #[arg(short = 'm', long)]
     pub message: Vec<String>,
 
+    /// The content type of the messages. Defaults to "application/octet-stream".
+    #[arg(short = 't', long, default_value = "application/octet-stream")]
+    pub content_type: String,
+
     /// The randomizers to use. Each instance can be a file with the raw
     /// randomizer, "" or "-". If "" or "-" is specified, then it will be read
     /// from standard input as a hex string. If none are passed, random ones
@@ -89,6 +93,9 @@ pub struct ProcessedArgs<C: Ciphersuite> {
 
     /// An optional auxiliary message to include in the signing package.
     pub aux_msg: Option<Vec<u8>>,
+
+    /// The content type of the messages.
+    pub content_type: String,
 }
 
 impl<C: Ciphersuite + 'static> ProcessedArgs<C> {
@@ -133,6 +140,7 @@ impl<C: Ciphersuite + 'static> ProcessedArgs<C> {
             randomizers,
             // TODO: add support
             aux_msg: None,
+            content_type: args.content_type.clone(),
         })
     }
 }
@@ -222,4 +230,20 @@ pub fn read_randomizers<C: Ciphersuite + 'static>(
             .collect::<Result<_, Box<dyn Error>>>()?
     };
     Ok(randomizers)
+}
+
+pub fn write_signatures(
+    filenames: &[String],
+    signatures: &[Vec<u8>],
+) -> Result<(), Box<dyn Error>> {
+    for (signature, signature_fn) in signatures.iter().zip(filenames.iter()) {
+        if signature_fn == "-" || signature_fn.is_empty() {
+            let hex_signature = hex::encode(signature);
+            eprintln!("{hex_signature}");
+        } else {
+            fs::write(signature_fn, signature)?;
+            eprintln!("Output written to {}", signature_fn);
+        }
+    }
+    Ok(())
 }

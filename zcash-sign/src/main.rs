@@ -4,7 +4,6 @@ use std::{error::Error, fs};
 
 use clap::Parser as _;
 use eyre::eyre;
-use pczt::Pczt;
 use rand::{thread_rng, RngCore};
 
 use orchard::keys::{Scope, SpendValidatingKey};
@@ -14,6 +13,7 @@ use zcash_keys::keys::UnifiedFullViewingKey;
 use zcash_protocol::consensus::{self};
 
 use args::{Args, Command};
+use zcash_sign::confirm::ParsedPczt;
 
 fn generate(args: &Command) -> Result<(), Box<dyn Error>> {
     let Command::Generate {
@@ -79,7 +79,7 @@ fn sign(args: &Command) -> Result<(), Box<dyn Error>> {
     };
 
     let tx_plan = fs::read(tx_plan)?;
-    let input = match Pczt::parse(&tx_plan) {
+    let input = match ParsedPczt::parse(&tx_plan) {
         Ok(pczt) => zcash_sign::Input::Pczt(pczt),
         Err(_) => zcash_sign::Input::YwalletTxPlan(serde_json::from_slice(&tx_plan)?),
     };

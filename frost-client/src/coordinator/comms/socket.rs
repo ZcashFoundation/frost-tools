@@ -107,7 +107,7 @@ impl<C: Ciphersuite> Comms<C> for SocketComms<C> {
         &mut self,
         signing_packages: &[SigningPackage<C>],
         randomizers: Option<&[frost_rerandomized::Randomizer<C>]>,
-        aux_msg: Option<Vec<u8>>,
+        aux_msg: Option<&[u8]>,
     ) -> Result<Vec<BTreeMap<Identifier<C>, SignatureShare<C>>>, Box<dyn Error>> {
         if signing_packages.len() != 1 {
             panic!("SocketComms only supports one message at a time");

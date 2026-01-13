@@ -1300,6 +1300,7 @@ dependencies = [
  "toml",
  "uuid",
  "xeddsa",
+ "zcash-sign",
  "zeroize",
 ]
 
@@ -5001,6 +5002,7 @@ dependencies = [
  "zcash_primitives",
  "zcash_proofs",
  "zcash_protocol",
+ "zcash_script",
  "zcash_transparent",
 ]
 
