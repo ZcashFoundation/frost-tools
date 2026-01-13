@@ -8,6 +8,7 @@ use eyre::{eyre, Context as _, OptionExt};
 
 use frost_core::Ciphersuite;
 use frost_ed25519::Ed25519Sha512;
+use frost_secp256k1_tr::Secp256K1Sha256TR;
 use reqwest::Url;
 use zeroize::Zeroizing;
 
@@ -28,6 +29,8 @@ pub async fn dkg(args: &Command) -> Result<(), Box<dyn Error>> {
         dkg_for_ciphersuite::<Ed25519Sha512>(args).await
     } else if ciphersuite == "redpallas" {
         dkg_for_ciphersuite::<reddsa::frost::redpallas::PallasBlake2b512>(args).await
+    } else if ciphersuite == "secp256k1-tr" {
+        dkg_for_ciphersuite::<Secp256K1Sha256TR>(args).await
     } else {
         Err(eyre!("unsupported ciphersuite").into())
     }

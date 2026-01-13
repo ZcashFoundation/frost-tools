@@ -11,7 +11,8 @@ purpose is to:
 The demos use the [Ed25519](https://crates.io/crates/frost-ed25519) ciphersuite
 by default, but they can also use the
 [RedPallas](https://github.com/ZcashFoundation/reddsa/) ciphersuite which is
-compatible with Zcash.
+compatible with Zcash, and the [Secp256k1-TR](https://crates.io/crates/frost-secp256k1-tr) ciphersuite
+which is compatible with Bitcoin taproot.
 
 ## About FROST (Flexible Round-Optimised Schnorr Threshold signatures)
 
@@ -62,12 +63,30 @@ You will need to have [Rust and Cargo](https://doc.rust-lang.org/cargo/getting-s
 
 To run:
 1. Clone the repo. Run `git clone https://github.com/ZcashFoundation/frost-zcash-demo.git`
-2. Run `cargo install`
+2. Run:
 
-and in separate terminals:
-3. Run `cargo run --bin trusted-dealer` or `cargo run --bin dkg`
-4. Run `cargo run --bin coordinator`
-5. Run `cargo run --bin participants`. Do this in separate terminals for separate participants.
+```bash
+# installs: frost-client, coordinator, dkg, participant, trusted-dealer
+cargo install --path frost-client
+
+# installs: frostd
+cargo install --path frostd
+
+# installs: zcash-sign
+# NOTE: Currently fails to build.
+cargo install --path zcash-sign
+```
+
+If running from installed binaries, in separate terminals:
+
+1. Run `trusted-dealer` or `dkg`
+2. Run `coordinator`
+3. Run `participant`. Do this in separate terminals for separate participants.
+
+If running from source, in separate terminals:
+1. Run `cargo run --bin trusted-dealer` or `cargo run --bin dkg`
+2. Run `cargo run --bin coordinator`
+3. Run `cargo run --bin participants`. Do this in separate terminals for separate participants.
 
 The demos support three communication mechanisms. By using the `--cli` flag (e.g.
 `cargo run --bin dkg -- --cli`), they will print JSON objects to the terminal,
@@ -85,6 +104,16 @@ Create 3 key shares with threshold 2 using trusted dealer:
 
 ```
 cargo run --bin trusted-dealer -- -t 2 -n 3
+```
+
+To use a different ciphersuite, add the `-C` flag:
+
+```
+# For RedPallas (Zcash compatible)
+cargo run --bin trusted-dealer -- -t 2 -n 3 -C redpallas
+
+# For Secp256k1-TR (Bitcoin taproot compatible)
+cargo run --bin trusted-dealer -- -t 2 -n 3 -C secp256k1-tr
 ```
 
 The key packages will be written to files. Securely send the partipant's key
@@ -123,6 +152,10 @@ See the [Ywallet demo tutorial](https://frost.zfnd.org/zcash/ywallet-demo.html).
 
 ## Curve selection
 
-Currently the demo supports curve Ed25519 and RedPallas. To use RedPallas, pass
+Currently the demo supports curve Ed25519, RedPallas, and Secp256k1-TR. To use RedPallas, pass
 `-C redpallas` to all commands (after `--`). When it's enabled, it will automatically
 switch to Rerandomized FROST and it can be used to sign Zcash transactions.
+
+To use Secp256k1-TR, pass `-C secp256k1-tr` to all commands (after `--`). When it's enabled,
+it will automatically switch to Rerandomized FROST and it can be used to sign Bitcoin
+taproot transactions.

@@ -47,6 +47,7 @@ reqwest = { workspace = true, default-features = false, features = ["json", "rus
 [dev-dependencies]
 axum-test = { workspace = true }
 frost-ed25519 = { workspace = true, features = ["serde"] }
+frost-secp256k1-tr = { workspace = true, features = ["serde"] }
 reddsa = { workspace = true, features = ["frost", "serde"] }
 regex = { workspace = true }
 rcgen = { workspace = true }
