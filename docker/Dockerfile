@@ -75,10 +75,6 @@ RUN --mount=type=bind,source=Cargo.toml,target=Cargo.toml,ro \
     cargo fetch --locked --target $TARGET_ARCH && \
     cargo metadata --locked --format-version=1 > /dev/null 2>&1
     
-#    --mount=type=bind,source=../frostd,target=frostd,ro \
-#    --mount=type=bind,source=../frost-client,target=frost-client,ro \
-#    --mount=type=bind,source=../zcash-sign,target=zcash-sign,ro \
-
 RUN --network=none \
     --mount=type=bind,source=Cargo.toml,target=Cargo.toml,ro \
     --mount=type=bind,source=Cargo.lock,target=Cargo.lock,ro \
