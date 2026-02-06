@@ -87,15 +87,17 @@ RUN --network=none \
     --mount=type=cache,target=${CARGO_TARGET_DIR} \
     --mount=type=cache,target=${CARGO_HOME} \
     cargo build --frozen --release --features "${FEATURES}" --target ${TARGET_ARCH} && \
-    install -D -m 0755 ${HOME}/target/${TARGET_ARCH}/release/frostd /usr/local/bin/frostd
-
-# # TODO : ADD OTHER BINS
-
-# This stage is used for exporting the binary
+    install -D -m 0755 ${HOME}/target/${TARGET_ARCH}/release/frostd /usr/local/bin/frostd && \
+		install -D -m 0755 ${HOME}/target/${TARGET_ARCH}/release/zcash-sign /usr/local/bin/zcash-sign && \
+    install -D -m 0755 ${HOME}/target/${TARGET_ARCH}/release/coordinator /usr/local/bin/coordinator && \
+    install -D -m 0755 ${HOME}/target/${TARGET_ARCH}/release/dkg /usr/local/bin/dkg && \
+    install -D -m 0755 ${HOME}/target/${TARGET_ARCH}/release/frost-client /usr/local/bin/frost-client && \
+    install -D -m 0755 ${HOME}/target/${TARGET_ARCH}/release/participant /usr/local/bin/participant && \
+    install -D -m 0755 ${HOME}/target/${TARGET_ARCH}/release/trusted-dealer /usr/local/bin/trusted-dealer
+		
+# This stage is used for exporting the binaries
 FROM scratch AS export
-COPY --from=release /usr/local/bin/frostd /frostd
-
-# # TODO : ADD OTHER BINS
+COPY --from=release /usr/local/bin/* /
 
 # This stage starts from scratch using StageX and copies the built frostd binary
 # from the `release` stage along with other binaries and files.
