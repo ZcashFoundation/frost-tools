@@ -56,7 +56,6 @@ ENV RUSTFLAGS="${RUSTFLAGS} -C link-arg=-Wl,--build-id=none"
 
 ENV SOURCE_DATE_EPOCH=1
 ENV CXXFLAGS="-include cstdint"
-# ENV ROCKSDB_USE_PKG_CONFIG=0
 
 RUN --mount=type=bind,source=Cargo.toml,target=Cargo.toml,ro \
     --mount=type=bind,source=Cargo.lock,target=Cargo.lock,ro \
