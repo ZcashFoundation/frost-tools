@@ -58,17 +58,13 @@ ENV SOURCE_DATE_EPOCH=1
 ENV CXXFLAGS="-include cstdint"
 # ENV ROCKSDB_USE_PKG_CONFIG=0
 
-
-# TODO : consider change from COPY . .
-#		 --mount=type=bind,source=../frostd,target=frostd,ro \
-#    --mount=type=bind,source=../frost-client,target=frost-client,ro \
-#    --mount=type=bind,source=../zcash-sign,target=zcash-sign,ro \
-
-COPY . .
-
 RUN --mount=type=bind,source=Cargo.toml,target=Cargo.toml,ro \
     --mount=type=bind,source=Cargo.lock,target=Cargo.lock,ro \
 		--mount=type=cache,target=${HOME}/target/ \
+		--mount=type=bind,source=../frostd,target=frostd,ro \
+		--mount=type=bind,source=../zcash-sign,target=zcash-sign,ro \
+		--mount=type=bind,source=../frost-client,target=frost-client,ro \
+		--mount=type=bind,source=../tests,target=tests,ro \
     --mount=type=cache,target=/usr/local/cargo/registry/ \
     --mount=type=cache,target=${CARGO_TARGET_DIR} \
     --mount=type=cache,target=${CARGO_HOME} \
@@ -78,6 +74,10 @@ RUN --mount=type=bind,source=Cargo.toml,target=Cargo.toml,ro \
 RUN --network=none \
     --mount=type=bind,source=Cargo.toml,target=Cargo.toml,ro \
     --mount=type=bind,source=Cargo.lock,target=Cargo.lock,ro \
+		--mount=type=bind,source=../frostd,target=frostd,ro \
+		--mount=type=bind,source=../zcash-sign,target=zcash-sign,ro \
+		--mount=type=bind,source=../frost-client,target=frost-client,ro \
+		--mount=type=bind,source=../tests,target=tests,ro \
     --mount=type=cache,target=${HOME}/target/ \
     --mount=type=cache,target=/usr/local/cargo/registry/ \
     --mount=type=cache,target=${CARGO_TARGET_DIR} \
