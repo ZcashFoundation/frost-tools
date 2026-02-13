@@ -23,7 +23,7 @@ signing operations while employing a novel technique to protect against forgery 
 
 ## Projects
 
-This repo contains 4 projects:
+This repo contains the following projects:
 
 1. [Trusted Dealer](https://github.com/ZcashFoundation/frost-zcash-demo/tree/main/trusted-dealer)
 2. [DKG](https://github.com/ZcashFoundation/frost-zcash-demo/tree/main/dkg)
@@ -46,6 +46,11 @@ The Zcash Signer is a standalone tool that allows signing a Zcash transaction
 with an externally-generated signature (e.g. using FROST, but could be something
 else).
 
+## Bootstrapped reproducable builds via StageX
+
+A bootstrapped and reproducable build pipeline using StageX is included in this repo.
+To create all binaries, you can simply run `make` in the root directory.
+The resulting binaries will be found in the `/build/` directory.
 
 ## Status ⚠
 
