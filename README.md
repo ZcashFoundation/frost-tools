@@ -49,9 +49,10 @@ else).
 ## Reproducable builds via StageX
 
 A bootstrapped and reproducable build pipeline using StageX is included in this repo.
-If you meet all the compatibility requirements, to create all binaries, you can run
-`make` in the root directory. The resulting binaries will be found in the
-`/build/` directory.
+
+To run this pipeline, simply use `make` in the root directory. This first checks if
+you meet all the compatibility requirements, and then creates all binaries which
+will be found in the `/build/` directory.
 
 ## Status ⚠
 
