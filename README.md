@@ -46,11 +46,12 @@ The Zcash Signer is a standalone tool that allows signing a Zcash transaction
 with an externally-generated signature (e.g. using FROST, but could be something
 else).
 
-## Bootstrapped reproducable builds via StageX
+## Reproducable builds via StageX
 
 A bootstrapped and reproducable build pipeline using StageX is included in this repo.
-To create all binaries, you can simply run `make` in the root directory.
-The resulting binaries will be found in the `/build/` directory.
+If you meet all the compatibility requirements, to create all binaries, you can run
+`make` in the root directory. The resulting binaries will be found in the
+`/build/` directory.
 
 ## Status ⚠
 
