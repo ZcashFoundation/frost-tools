@@ -94,8 +94,8 @@ RUN --network=none \
 FROM scratch AS export
 COPY --from=release /usr/local/bin/* /
 
-# This stage starts from scratch using StageX and copies the built frostd binary
-# from the `release` stage along with other binaries and files.
+# This stage starts from scratch using StageX and copies all the built binaries
+# from the `release` stage.
 FROM scratch AS runtime
 COPY --from=setup /usr/bin/busybox . /
 RUN ["busybox", "--install", "-s", "usr/bin"]
@@ -103,7 +103,7 @@ RUN ["busybox", "--install", "-s", "usr/bin"]
 ARG FEATURES
 ENV FEATURES=${FEATURES}
 
-# Create a non-privileged user for running `frostd`.
+# Create a non-privileged user for running `frostd` or other binaries.
 #
 # We use a high UID/GID (10101) to avoid overlap with host system users.
 # This reduces the risk of container user namespace conflicts with host accounts,
@@ -148,7 +148,13 @@ WORKDIR ${HOME}
 # User with UID=${UID} is created above and used via setpriv in entrypoint.sh.
 
 COPY --from=release /usr/local/bin/frostd /usr/local/bin/
+COPY --from=release	/usr/local/bin/zcash-sign /usr/local/bin/
+COPY --from=release /usr/local/bin/coordinator /usr/local/bin/
+COPY --from=release	/usr/local/bin/dkg /usr/local/bin/
+COPY --from=release	/usr/local/bin/frost-client /usr/local/bin/
+COPY --from=release /usr/local/bin/participant /usr/local/bin/
+COPY --from=release	/usr/local/bin/trusted-dealer /usr/local/bin/
 # COPY --chown=${UID}:${GID} ./docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 
 ENTRYPOINT [ "entrypoint.sh" ]
-CMD ["frostd"]
+#CMD [""]
