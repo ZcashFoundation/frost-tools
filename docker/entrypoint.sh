@@ -18,8 +18,8 @@ set -eo pipefail
 echo "INFO: Using the following environment variables:"
 printenv
 
-echo "Testing frostd to print version string:"
-./frostd help
+echo "Testing frostd --help :"
+./frostd --help
 
 echo "Now runnning exec $@ "
 exec "$@"
