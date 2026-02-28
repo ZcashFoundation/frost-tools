@@ -18,8 +18,18 @@ set -eo pipefail
 echo "INFO: Using the following environment variables:"
 printenv
 
-echo "Testing frostd --help :"
-./frostd --help
+echo "Testing --version for all binaries :"
+echo "frostd:"
+./frostd --version
+echo "zcash-sign:"
+./zcash-sign --version
+echo "The following binaries all return frost-client versions:"
+./frost-client --version
+./coordinator --version
+./participant --version
+./trusted-dealer --version
+./dkg --version
+
 
 echo "Now runnning exec $@ "
 exec "$@"

@@ -23,11 +23,13 @@ load:
 	@./docker/load_image.sh
 	@echo "make load step complete."
 
+# frostd binary
 frostd:
 	@echo "Running frostd from image."
 	@./docker/run_frostd.sh
 	@echo "make frostd step complete."
-	
+
+# frost-client binaries
 frost-client:
 	@echo "Running frost-client from image."
 	@./docker/run_frost-client.sh
@@ -48,12 +50,13 @@ trusted-dealer:
 	@./docker/run_trusted-dealer.sh
 	@echo "make trusted-dealer step complete."
 
-zcash-sign:
-	@echo "Running zcash-sign from image."
-	@./docker/run_zcash-sign.sh
-	@echo "make zcash-sign step complete."
-
 dkg:
 	@echo "Running dkg from image."
 	@./docker/run_dkg.sh
 	@echo "make dkg step complete."
+
+# zcash-sign binary
+zcash-sign:
+	@echo "Running zcash-sign from image."
+	@./docker/run_zcash-sign.sh
+	@echo "make zcash-sign step complete."

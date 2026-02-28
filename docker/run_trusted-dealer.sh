@@ -8,5 +8,5 @@ if [ -z "$(docker images -q frost-tools:latest 2>/dev/null)" ]; then
   echo "There is no frost-tools:latest image listed by docker."
 else
   echo "Running trusted-dealer ..."
-  docker run frost-tools:latest ./trusted-dealer --version
+  docker run frost-tools:latest ./trusted-dealer --help
 fi
