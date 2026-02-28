@@ -51,8 +51,8 @@ else).
 A bootstrapped and reproducible build pipeline using StageX is included in this repo.
 
 To run this pipeline, simply use `make` in the root directory. This first checks if
-you meet all the compatibility requirements, and then creates all binaries which
-will be found in the `/build/` directory.
+you meet all the compatibility requirements, and then creates an OCI compatible image and
+copies all binaries onto the host, which will be found in the `/build/` directory.
 
 ## Status ⚠
 
