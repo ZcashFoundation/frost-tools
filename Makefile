@@ -35,7 +35,7 @@ frost-client:
 
 coordinator:
 	@echo "Running coodinator from image."
-	@./docker/run_coodinator.sh
+	@./docker/run_coordinator.sh
 	@echo "make coordinator step complete."
 
 participant:
