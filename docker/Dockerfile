@@ -20,8 +20,10 @@ ARG CARGO_HOME="${HOME}/.cargo"
 ARG CARGO_TARGET_DIR="${HOME}/target"
 ARG TARGET_ARCH="x86_64-unknown-linux-musl"
 
-FROM stagex/core-busybox@sha256:d608daa946e4799cf28b105aba461db00187657bd55ea7c2935ff11dac237e27 AS busybox
+# Build dependency
 FROM stagex/pallet-rust@sha256:4062550919db682ebaeea07661551b5b89b3921e3f3a2b0bc665ddea7f6af1ca AS pallet-rust
+# Runtime Dependency
+FROM stagex/core-busybox@sha256:d608daa946e4799cf28b105aba461db00187657bd55ea7c2935ff11dac237e27 AS busybox
 
 # This stage captures build args as env vars
 FROM pallet-rust AS setup
@@ -39,7 +41,7 @@ ENV CARGO_HOME=${CARGO_HOME}
 ARG FEATURES
 ENV FEATURES=${FEATURES}
 
-# This stage builds the frostd release binary.
+# This stage builds the release binaries.
 FROM setup AS release
 
 ARG HOME
@@ -94,11 +96,11 @@ RUN --network=none \
 FROM scratch AS export
 COPY --from=release /usr/local/bin/* /
 
-# This stage starts from scratch using StageX and copies all the built binaries
+# This stage starts from busybox, using StageX and copies all the built binaries
 # from the `release` stage.
-FROM scratch AS runtime
-COPY --from=setup /usr/bin/busybox . /
-RUN ["busybox", "--install", "-s", "usr/bin"]
+FROM busybox AS runtime
+#COPY --from=setup /usr/bin/busybox . /
+#RUN ["busybox", "--install", "-s", "usr/bin"]
 
 ARG FEATURES
 ENV FEATURES=${FEATURES}
@@ -127,25 +129,19 @@ ARG HOME
 ENV HOME=${HOME}
 
 
-COPY --chmod=644 <<-EOF /etc/passwd
+COPY --chmod=550 <<-EOF /etc/passwd
 	root:x:0:0:root:/root:/bin/sh
 	user:x:${UID}:${GID}::${HOME}:/bin/sh
 EOF
 
-COPY --chmod=644 <<-EOF /etc/group
+COPY --chmod=550 <<-EOF /etc/group
 	root:x:0:
 	user:x:${GID}:
 EOF
 
 USER ${UID}:${GID}
 
-WORKDIR ${HOME}
-
-# We're explicitly NOT using the USER directive here.
-# Instead, we run as root initially and use setpriv in the entrypoint.sh
-# to step down to the non-privileged user. This allows us to change permissions
-# on mounted volumes before running the application as a non-root user.
-# User with UID=${UID} is created above and used via setpriv in entrypoint.sh.
+WORKDIR /usr/local/bin
 
 COPY --from=release /usr/local/bin/frostd /usr/local/bin/
 COPY --from=release	/usr/local/bin/zcash-sign /usr/local/bin/
@@ -154,7 +150,7 @@ COPY --from=release	/usr/local/bin/dkg /usr/local/bin/
 COPY --from=release	/usr/local/bin/frost-client /usr/local/bin/
 COPY --from=release /usr/local/bin/participant /usr/local/bin/
 COPY --from=release	/usr/local/bin/trusted-dealer /usr/local/bin/
-# COPY --chown=${UID}:${GID} ./docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY --chown=${UID}:${GID} ./docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 
 ENTRYPOINT [ "entrypoint.sh" ]
-#CMD [""]
+#CMD [ "frostd" ]
