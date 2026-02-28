@@ -3,7 +3,7 @@
 # Running `make` or `make stagex` will leverage the steps below
 # to check compatibility and build the binaries via StageX.
 
-.PHONY: stagex compat build
+.PHONY: stagex compat build load
 
 stagex:	compat build
 	@echo "stagex build completed via make."
