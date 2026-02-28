@@ -17,3 +17,9 @@ build:
 	@echo "Entering Build step."
 	@./docker/build.sh
 	@echo "Build step complete."
+
+load:
+	@echo "Attempting to load OCI image into local docker image store."
+	@./docker/load_image.sh
+	@echo "make load step complete."
+
