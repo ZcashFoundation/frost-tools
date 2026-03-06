@@ -29,6 +29,7 @@ frostd:
 	@./docker/run_frostd.sh
 	@echo "make frostd step complete."
 
+# ! Trusted Dealer, DKG, Coordinator, Participant - all documented as demo, WIP
 # frost-client binaries
 frost-client:
 	@echo "Running frost-client from image."

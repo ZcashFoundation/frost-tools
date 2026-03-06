@@ -7,6 +7,7 @@ echo "Checking local docker image store to see if a frost-tools:latest image is 
 if [ -z "$(docker images -q frost-tools:latest 2>/dev/null)" ]; then
   echo "There is no frost-tools:latest image listed by docker."
 else
-  echo "Running participant ..."
-  docker run frost-tools:latest ./participant --help
+  echo "Running participant interactively ..."
+  echo "Defaults to file key-package-1.json - change with -k option"
+  docker run frost-tools:latest ./participant --cli
 fi
