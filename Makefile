@@ -23,29 +23,22 @@ load:
 	@./docker/load_image.sh
 	@echo "make load step complete."
 
-# frostd binary
+# frostd binary:
 frostd:
 	@echo "Running frostd from image."
 	@./docker/run_frostd.sh
 	@echo "make frostd step complete."
 
-# ! Trusted Dealer, DKG, Coordinator, Participant - all documented as demo, WIP
-# frost-client binaries
+# frost-client binaries:
 frost-client:
 	@echo "Running frost-client from image."
 	@./docker/run_frost-client.sh
 	@echo "make frost-client step complete."
 
-coordinator:
-	@echo "Running coodinator from image."
-	@./docker/run_coordinator.sh
-	@echo "make coordinator step complete."
-
-participant:
-	@echo "Running paticipant from image."
-	@./docker/run_participant.sh
-	@echo "make participant step complete."
-	
+# ! Trusted Dealer, DKG, Coordinator, Participant - all documented as demo, WIP
+# to run an interactive demo ... launch trusted-dealer or dkg. a coordinator, and 3 participants in separate containers and terminals.
+# 
+# Trusted dealer and dkg are both used to generate key packages. To demo, either can be used.
 trusted-dealer:
 	@echo "Running trusted-dealer from image."
 	@./docker/run_trusted-dealer.sh
@@ -55,6 +48,16 @@ dkg:
 	@echo "Running dkg from image."
 	@./docker/run_dkg.sh
 	@echo "make dkg step complete."
+
+coordinator:
+	@echo "Running coodinator from image."
+	@./docker/run_coordinator.sh
+	@echo "make coordinator step complete."
+
+participant:
+	@echo "Running participant from image."
+	@./docker/run_participant.sh
+	@echo "make participant-one step complete."
 
 # zcash-sign binary
 zcash-sign:
