@@ -7,6 +7,8 @@ echo "Checking local docker image store to see if a frost-tools:latest image is 
 if [ -z "$(docker images -q frost-tools:latest 2>/dev/null)" ]; then
   echo "There is no frost-tools:latest image listed by docker."
 else
-  echo "Running dkg ..."
+  echo "Generate FROST shares using Distributed Key Generation."
+  echo "Running dkg --help ..."
   docker run frost-tools:latest ./dkg --help
+  docker run -it frost-tools:latest ./dkg
 fi
