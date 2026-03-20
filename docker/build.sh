@@ -30,4 +30,3 @@ docker build -f "$DOCKERFILE" "$REPO_ROOT" --quiet \
 	--target export \
 	--output type=local,dest="$REPO_ROOT/build" \
 	"$@"
-
