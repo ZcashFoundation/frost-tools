@@ -25,6 +25,10 @@ docker build -f "$DOCKERFILE" "$REPO_ROOT" \
 
 # Extract from export stage
 echo "Extracting binaries..."
+# in Dockerfile, ARG FEATURES="" sets a default value (empty) if nothing is
+# provided.
+# Future build patterns could override it at build time using:
+# docker build --build-arg FEATURES=feature1,feature2 ...
 docker build -f "$DOCKERFILE" "$REPO_ROOT" --quiet \
 	--platform "$PLATFORM" \
 	--target export \
