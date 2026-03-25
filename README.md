@@ -52,7 +52,11 @@ A bootstrapped and reproducible build pipeline using StageX is included in this 
 
 To run this pipeline, simply use `make` in the root directory. This first checks if
 you meet all the compatibility requirements, and then creates an OCI compatible image and
-copies all binaries onto the host, which will be found in the `/build/` directory.
+copies all binaries onto the host, which will be found in the `/build/` directory, along
+with an OCI image in the form of a tar ball.
+
+This image can be loaded into docker with the `make load` convenience script, and contains
+all 7 binaries.
 
 ## Status ⚠
 
@@ -72,7 +76,7 @@ To run:
 2. Run `cargo install`
 
 and in separate terminals:
-3. Run `cargo run --bin trusted-dealer` or `cargo run --bin dkg`
+3. Run either `cargo run --bin trusted-dealer` or `cargo run --bin dkg` to generate key packages.
 4. Run `cargo run --bin coordinator`
 5. Run `cargo run --bin participants`. Do this in separate terminals for separate participants.
 
@@ -133,3 +137,47 @@ See the [Ywallet demo tutorial](https://frost.zfnd.org/zcash/ywallet-demo.html).
 Currently the demo supports curve Ed25519 and RedPallas. To use RedPallas, pass
 `-C redpallas` to all commands (after `--`). When it's enabled, it will automatically
 switch to Rerandomized FROST and it can be used to sign Zcash transactions.
+
+## StageX container examples
+
+`frostd` is a JSON-HTTPS server that allow FROST clients (Coordinator and Participants) to
+run FROST without needing to directly connect to one another.
+Documentation is available at https://frost.zfnd.org/zcash/server.html
+`docker run frost-tools:latest ./frostd --help`
+
+`frost-client` is a command-line tool that allows running the FROST protocol using the
+FROST server to help with communication. It uses a config file to store things like secret
+shares, group information and contacts, but be advised that it stores secrets unencrypted
+in the config file.
+For an usage example, check https://frost.zfnd.org/zcash/ywallet-demo.html
+`docker run frost-tools:latest ./frost-client --help`
+
+`trusted-dealer`
+This demo defaults to use ed25519-sha512-v1 and threshold 2 with 3 participants,
+non-interactively, writing json key package files in the working directory.
+`docker run frost-tools:latest ./trusted-dealer`
+
+`dkg`
+Generate FROST shares using Distributed Key Generation.
+`docker run frost-tools:latest ./dkg --help`
+`docker run -it frost-tools:latest ./dkg`
+
+`coordinator` can be run as an interactive cli.
+When prompted for the message to be signed (hex encoded), this corresponds to the
+'signing_share' from the key package output by the trusted dealer.
+When prompted for 'JSON encoded commitments for participant' this is the
+'SigningCommitments' produced with the participant command.
+`docker run -it frost-tools:latest ./coordinator --cli`
+
+`participant`
+Participants must have key packages, which can be provided as files (with the option -k )
+or copy-pasted.
+For this demo, as each participant must be in its own container and in its own terminal,
+and use copy-pasting.
+`docker run -it frost-tools:latest ./participant --cli`
+
+`zcash-sign`
+This is both a command line tool and a library which allow creating a Zcash transaction
+from a YWallet transaction plan, by using externally-generated signatures.
+It was built to use along with FROST but it is not restricted to it.
+`docker run frost-tools:latest ./zcash-sign --help`
