@@ -158,7 +158,8 @@ non-interactively, writing json key package files in the working directory.
 `docker run frost-tools:latest ./trusted-dealer`
 
 `dkg`
-Generate FROST shares using Distributed Key Generation.
+Instead of `trusted-dealer` one can use `dkg`: generate FROST shares using Distributed
+Key Generation.
 `docker run frost-tools:latest ./dkg --help`
 `docker run -it frost-tools:latest ./dkg`
 
