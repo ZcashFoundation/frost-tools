@@ -54,29 +54,28 @@ ENV RUSTFLAGS="${RUSTFLAGS} -C link-arg=-Wl,--build-id=none"
 ENV SOURCE_DATE_EPOCH=1
 ENV CXXFLAGS="-include cstdint"
 
-RUN --mount=type=bind,source=Cargo.toml,target=Cargo.toml,ro \
-    --mount=type=bind,source=Cargo.lock,target=Cargo.lock,ro \
-		--mount=type=cache,target=${HOME}/target/ \
+RUN --mount=type=cache,target=/usr/local/.cargo/registry/ \
+		--mount=type=cache,target=/usr/local/.cargo/git \
+		--mount=type=bind,source=rust-toolchain.toml,target=rust-toolchain.toml,ro \
+		--mount=type=bind,source=Cargo.toml,target=Cargo.toml,ro \
+		--mount=type=bind,source=Cargo.lock,target=Cargo.lock,ro \
 		--mount=type=bind,source=../frostd,target=frostd,ro \
 		--mount=type=bind,source=../zcash-sign,target=zcash-sign,ro \
 		--mount=type=bind,source=../frost-client,target=frost-client,ro \
 		--mount=type=bind,source=../tests,target=tests,ro \
-    --mount=type=cache,target=/usr/local/cargo/registry/ \
-    --mount=type=cache,target=${CARGO_TARGET_DIR} \
-    --mount=type=cache,target=${CARGO_HOME} \
     cargo fetch --locked --target $TARGET_ARCH
-    
+
 RUN --network=none \
-    --mount=type=bind,source=Cargo.toml,target=Cargo.toml,ro \
-    --mount=type=bind,source=Cargo.lock,target=Cargo.lock,ro \
+    --mount=type=cache,target=/usr/local/.cargo/registry/ \
+		--mount=type=cache,target=/usr/local/.cargo/git \
+    --mount=type=cache,target=/home/ftools/target/ \
+		--mount=type=bind,source=rust-toolchain.toml,target=rust-toolchain.toml,ro \
+		--mount=type=bind,source=Cargo.toml,target=Cargo.toml,ro \
+		--mount=type=bind,source=Cargo.lock,target=Cargo.lock,ro \
 		--mount=type=bind,source=../frostd,target=frostd,ro \
 		--mount=type=bind,source=../zcash-sign,target=zcash-sign,ro \
 		--mount=type=bind,source=../frost-client,target=frost-client,ro \
 		--mount=type=bind,source=../tests,target=tests,ro \
-    --mount=type=cache,target=${HOME}/target/ \
-    --mount=type=cache,target=/usr/local/cargo/registry/ \
-    --mount=type=cache,target=${CARGO_TARGET_DIR} \
-    --mount=type=cache,target=${CARGO_HOME} \
     cargo build --frozen --release ${FEATURES:+--features ${FEATURES}} --target ${TARGET_ARCH} && \
     install -D -m 0755 ${HOME}/target/${TARGET_ARCH}/release/frostd /usr/local/bin/frostd && \
 		install -D -m 0755 ${HOME}/target/${TARGET_ARCH}/release/zcash-sign /usr/local/bin/zcash-sign && \
