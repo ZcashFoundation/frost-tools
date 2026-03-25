@@ -31,7 +31,6 @@ SHELL ["/bin/sh", "-xo", "pipefail", "-c"]
 ARG HOME
 WORKDIR ${HOME}
 
-# Build arguments and variables
 ARG CARGO_INCREMENTAL
 # default to 0, disables incremental compilation.
 ENV CARGO_INCREMENTAL=${CARGO_INCREMENTAL:-0}
@@ -40,11 +39,10 @@ ARG CARGO_HOME
 ENV CARGO_HOME=${CARGO_HOME}
 
 ARG CARGO_TARGET_DIR
+ARG TARGET_ARCH
 
 ARG FEATURES
 ENV FEATURES=${FEATURES}
-
-ARG TARGET_ARCH
 
 ENV RUST_BACKTRACE=1
 ENV RUSTFLAGS="-C codegen-units=1"
