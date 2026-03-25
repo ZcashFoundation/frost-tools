@@ -30,6 +30,5 @@ echo "The following binaries all return frost-client versions:"
 ./trusted-dealer --version
 ./dkg --version
 
-
 echo "Now runnning exec $@ "
 exec "$@"

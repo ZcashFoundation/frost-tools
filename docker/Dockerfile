@@ -2,7 +2,7 @@
 
 # stages:
 # - release: setup and builds release binaries
-# - export: discrete stage for writing binaries into build directory
+# - export: discrete stage for writing binaries into host build directory
 # - runtime: prepares the release image
 #
 # We first set default values for build arguments used across the stages.
@@ -54,8 +54,8 @@ ENV RUSTFLAGS="${RUSTFLAGS} -C link-arg=-Wl,--build-id=none"
 ENV SOURCE_DATE_EPOCH=1
 ENV CXXFLAGS="-include cstdint"
 
-RUN --mount=type=cache,target=/usr/local/.cargo/registry/ \
-		--mount=type=cache,target=/usr/local/.cargo/git \
+RUN --mount=type=cache,target=${CARGO_HOME}/registry \
+		--mount=type=cache,target=${CARGO_HOME}/git \
 		--mount=type=bind,source=rust-toolchain.toml,target=rust-toolchain.toml,ro \
 		--mount=type=bind,source=Cargo.toml,target=Cargo.toml,ro \
 		--mount=type=bind,source=Cargo.lock,target=Cargo.lock,ro \
@@ -66,9 +66,9 @@ RUN --mount=type=cache,target=/usr/local/.cargo/registry/ \
     cargo fetch --locked --target $TARGET_ARCH
 
 RUN --network=none \
-    --mount=type=cache,target=/usr/local/.cargo/registry/ \
-		--mount=type=cache,target=/usr/local/.cargo/git \
-    --mount=type=cache,target=/home/ftools/target/ \
+    --mount=type=cache,target=${CARGO_HOME}/registry \
+		--mount=type=cache,target=${CARGO_HOME}/git \
+    --mount=type=cache,target=${HOME}/target/ \
 		--mount=type=bind,source=rust-toolchain.toml,target=rust-toolchain.toml,ro \
 		--mount=type=bind,source=Cargo.toml,target=Cargo.toml,ro \
 		--mount=type=bind,source=Cargo.lock,target=Cargo.lock,ro \
@@ -85,7 +85,7 @@ RUN --network=none \
     install -D -m 0755 ${HOME}/target/${TARGET_ARCH}/release/participant /usr/local/bin/participant && \
     install -D -m 0755 ${HOME}/target/${TARGET_ARCH}/release/trusted-dealer /usr/local/bin/trusted-dealer
 
-# This stage is used for exporting the binaries
+# This stage is used for exporting the binaries to the host
 FROM scratch AS export
 COPY --from=release /usr/local/bin/* /
 
