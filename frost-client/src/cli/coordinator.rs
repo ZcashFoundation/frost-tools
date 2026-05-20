@@ -163,7 +163,11 @@ pub(crate) async fn run_for_ciphersuite<C: RandomizedCiphersuite + 'static>(
     let signature = cli::coordinator(&mut comms, pargs).await?;
 
     let serialized_signature = signature.serialize()?;
-    fs::write(&signature_fn, &serialized_signature)?;
-    eprintln!("Raw signature written to {}", &signature_fn);
+    if signature_fn.is_empty() || signature_fn == "-" {
+        println!("{}", hex::encode(&serialized_signature));
+    } else {
+        fs::write(&signature_fn, &serialized_signature)?;
+        eprintln!("Raw signature written to {}", &signature_fn);
+    }
     Ok(signature)
 }
