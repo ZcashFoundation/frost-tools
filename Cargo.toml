@@ -73,6 +73,6 @@ zeroize = "1.8.1"
 
 [patch.crates-io]
 # TODO: remove this when https://github.com/zcash/orchard/pull/475 is merged,
-# and a all ECC crates are updated to point to the orchard version that includes
+# and all ECC crates are updated to point to the orchard version that includes
 # it.
 orchard = { git = "https://github.com/conradoplg/orchard.git", rev = "4d001c5b6ad15373e68a5923d5868fbe42daba96" }
