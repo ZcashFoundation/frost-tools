@@ -5,25 +5,16 @@ use frost_rerandomized::{RandomizedCiphersuite, Randomizer};
 use rand::thread_rng;
 use reddsa::frost::redpallas::PallasBlake2b512;
 
-use std::{
-    fs,
-    io::{BufRead, Write},
-};
-
 use super::{args::ProcessedArgs, comms::Comms, round_1::ParticipantsConfig};
 
 pub async fn send_signing_package_and_get_signature_shares<C: RandomizedCiphersuite + 'static>(
     args: &ProcessedArgs<C>,
     comms: &mut dyn Comms<C>,
-    input: &mut dyn BufRead,
-    logger: &mut dyn Write,
     participants: ParticipantsConfig<C>,
     signing_package: &SigningPackage<C>,
 ) -> Result<Signature<C>, Box<dyn std::error::Error>> {
     let group_signature =
-        request_inputs_signature_shares(args, comms, input, logger, participants, signing_package)
-            .await?;
-    print_signature(args, logger, group_signature)?;
+        request_inputs_signature_shares(args, comms, participants, signing_package).await?;
     Ok(group_signature)
 }
 
@@ -33,8 +24,6 @@ pub async fn send_signing_package_and_get_signature_shares<C: RandomizedCiphersu
 async fn request_inputs_signature_shares<C: RandomizedCiphersuite + 'static>(
     args: &ProcessedArgs<C>,
     comms: &mut dyn Comms<C>,
-    input: &mut dyn BufRead,
-    logger: &mut dyn Write,
     participants: ParticipantsConfig<C>,
     signing_package: &SigningPackage<C>,
 ) -> Result<Signature<C>, Box<dyn std::error::Error>> {
@@ -49,7 +38,7 @@ async fn request_inputs_signature_shares<C: RandomizedCiphersuite + 'static>(
     };
 
     let signatures_list = comms
-        .send_signing_package_and_get_signature_shares(input, logger, signing_package, randomizer)
+        .send_signing_package_and_get_signature_shares(signing_package, randomizer)
         .await?;
 
     let group_signature = if let Some(randomizer) = randomizer {
@@ -74,23 +63,7 @@ async fn request_inputs_signature_shares<C: RandomizedCiphersuite + 'static>(
         .unwrap()
     };
 
-    Ok(group_signature)
-}
+    comms.process_signature(&group_signature).await?;
 
-fn print_signature<C: Ciphersuite + 'static>(
-    args: &ProcessedArgs<C>,
-    logger: &mut dyn Write,
-    group_signature: Signature<C>,
-) -> Result<(), Box<dyn std::error::Error>> {
-    if args.signature.is_empty() {
-        writeln!(
-            logger,
-            "Signature:\n{}",
-            hex::encode(&group_signature.serialize()?)
-        )?;
-    } else {
-        fs::write(&args.signature, group_signature.serialize()?)?;
-        eprintln!("Raw signature written to {}", &args.signature);
-    };
-    Ok(())
+    Ok(group_signature)
 }

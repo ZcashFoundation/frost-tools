@@ -1,5 +1,4 @@
 use std::{
-    collections::HashMap,
     env,
     error::Error,
     fs,
@@ -9,8 +8,7 @@ use std::{
 use clap::Parser;
 use eyre::eyre;
 
-use crate::cipher::{PrivateKey, PublicKey};
-use frost_core::{keys::PublicKeyPackage, Ciphersuite, Identifier};
+use frost_core::{keys::PublicKeyPackage, Ciphersuite};
 use frost_rerandomized::Randomizer;
 
 use super::input::read_from_file_or_stdin;
@@ -77,18 +75,6 @@ pub struct Args {
 
 #[derive(Clone)]
 pub struct ProcessedArgs<C: Ciphersuite> {
-    /// CLI mode. If enabled, it will prompt for inputs from stdin
-    /// and print values to stdout, ignoring other flags.
-    /// If false, socket communication is enabled.
-    pub cli: bool,
-
-    /// HTTP mode. If enabled, it will use HTTP communication with a
-    /// FROST server.
-    pub http: bool,
-
-    /// Signers to use in HTTP mode, as a map of public keys to identifiers.
-    pub signers: HashMap<PublicKey, Identifier<C>>,
-
     /// The number of participants.
     pub num_signers: u16,
 
@@ -100,24 +86,6 @@ pub struct ProcessedArgs<C: Ciphersuite> {
 
     /// The randomizers to use.
     pub randomizers: Vec<Randomizer<C>>,
-
-    /// Where to write the generated raw bytes signature. If "-", the
-    /// human-readable hex-string is printed to stdout.
-    pub signature: String,
-
-    /// IP to bind to, if using socket comms.
-    /// IP to connect to, if using HTTP mode.
-    pub ip: String,
-
-    /// Port to bind to, if using socket comms.
-    /// Port to connect to, if using HTTP mode.
-    pub port: u16,
-
-    /// The coordinator's communication private key for HTTP mode.
-    pub comm_privkey: Option<PrivateKey>,
-
-    /// The coordinator's communication public key for HTTP mode.
-    pub comm_pubkey: Option<PublicKey>,
 }
 
 impl<C: Ciphersuite + 'static> ProcessedArgs<C> {
@@ -156,18 +124,10 @@ impl<C: Ciphersuite + 'static> ProcessedArgs<C> {
         let randomizers = read_randomizers(&args.randomizer, output, input)?;
 
         Ok(ProcessedArgs {
-            cli: args.cli,
-            http: false,
-            signers: HashMap::new(),
             num_signers,
             public_key_package,
             messages,
             randomizers,
-            signature: args.signature.clone(),
-            ip: args.ip.clone(),
-            port: args.port,
-            comm_privkey: None,
-            comm_pubkey: None,
         })
     }
 }

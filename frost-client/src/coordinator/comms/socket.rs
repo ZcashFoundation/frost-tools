@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use frost_core as frost;
+use frost_core::{self as frost, Signature};
 
 use frost_core::Ciphersuite;
 
@@ -18,14 +18,8 @@ use frost::{
     SigningPackage,
 };
 
-use std::{
-    collections::BTreeMap,
-    error::Error,
-    io::{BufRead, Write},
-    marker::PhantomData,
-};
+use std::{collections::BTreeMap, error::Error, marker::PhantomData};
 
-use super::super::args::ProcessedArgs;
 use super::{Comms, Message};
 
 pub struct SocketComms<C: Ciphersuite> {
@@ -36,9 +30,9 @@ pub struct SocketComms<C: Ciphersuite> {
 }
 
 impl<C: Ciphersuite> SocketComms<C> {
-    pub fn new(args: &ProcessedArgs<C>) -> Self {
+    pub fn new(ip: String, port: String) -> Self {
         let (handler, listener) = node::split::<()>();
-        let addr = format!("{}:{}", args.ip, args.port);
+        let addr = format!("{}:{}", ip, port);
         let (tx, rx) = mpsc::channel(2000);
 
         let _ = handler
@@ -77,8 +71,6 @@ impl<C: Ciphersuite> SocketComms<C> {
 impl<C: Ciphersuite> Comms<C> for SocketComms<C> {
     async fn get_signing_commitments(
         &mut self,
-        _input: &mut dyn BufRead,
-        _output: &mut dyn Write,
         _pub_key_package: &PublicKeyPackage<C>,
         num_of_participants: u16,
     ) -> Result<BTreeMap<Identifier<C>, SigningCommitments<C>>, Box<dyn Error>> {
@@ -108,8 +100,6 @@ impl<C: Ciphersuite> Comms<C> for SocketComms<C> {
 
     async fn send_signing_package_and_get_signature_shares(
         &mut self,
-        _input: &mut dyn BufRead,
-        _output: &mut dyn Write,
         signing_package: &SigningPackage<C>,
         randomizer: Option<frost_rerandomized::Randomizer<C>>,
     ) -> Result<BTreeMap<Identifier<C>, SignatureShare<C>>, Box<dyn Error>> {
@@ -151,5 +141,9 @@ impl<C: Ciphersuite> Comms<C> for SocketComms<C> {
             }
         }
         Ok(signature_shares)
+    }
+
+    async fn process_signature(&mut self, _signature: &Signature<C>) -> Result<(), Box<dyn Error>> {
+        Ok(())
     }
 }
