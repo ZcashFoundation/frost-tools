@@ -11,7 +11,8 @@ use halo2_proofs::pasta::group::ff::PrimeField;
 use orchard::primitives::redpallas::{self, SpendAuth};
 use zcash_keys::keys::UnifiedFullViewingKey;
 use zcash_primitives::transaction::{
-    sighash::SignableInput, sighash_v5::v5_signature_hash, txid::TxIdDigester, TxVersion,
+    sighash::SignableInput, sighash_v5::v5_signature_hash, sighash_v6::v6_signature_hash,
+    txid::TxIdDigester, TxVersion,
 };
 
 use crate::transaction_plan::TransactionPlan;
@@ -25,8 +26,8 @@ pub enum Input {
     Pczt(Pczt),
 }
 
-/// Closure error for the low-level signer. `sign_orchard_with` requires
-/// `E: From<OrchardParseError>`; the apply pass also needs to carry an
+/// Closure error for the low-level signer. `sign_orchard_with` / `sign_ironwood_with`
+/// require `E: From<OrchardParseError>`; the apply pass also needs to carry an
 /// `apply_signature` failure. Both variants are surfaced through their `Debug`
 /// formatting in the `eyre!` messages at the call sites.
 #[derive(Debug)]
@@ -70,12 +71,18 @@ fn sign_pczt(
         .map_err(|e| eyre!("Not enough information to build the transaction's effects: {e:?}"))?;
     let txid_parts = tx_data.digest(TxIdDigester);
 
-    let sighash = match tx_data.version() {
+    // Dispatch the sighash by transaction version: Ironwood spends live in v6
+    // transactions, whose sighash includes the Ironwood bundle. Using the v5 hash
+    // for a v6 transaction yields a hash the transaction extractor rejects
+    // (SighashMismatch), and that only surfaces at broadcast.
+    let version = tx_data.version();
+    let sighash = match version {
+        TxVersion::V6 => v6_signature_hash(&tx_data, &SignableInput::Shielded, &txid_parts),
         TxVersion::V5 if tx_data.orchard_bundle().is_some() => {
             v5_signature_hash(&tx_data, &SignableInput::Shielded, &txid_parts)
         }
         _ => Err(eyre!(
-            "Only version 5 transactions with shielded Orchard components are supported"
+            "Only v6 (Ironwood) and v5 shielded-Orchard transactions are supported"
         ))?,
     };
     let sighash: [u8; 32] = sighash
@@ -86,21 +93,38 @@ fn sign_pczt(
     println!("SIGHASH: {}", hex::encode(sighash));
 
     // Pass 1: read the randomizer (alpha) of each real spend awaiting a signature.
+    // The bundle is Orchard-shaped in both cases; only the signer entry point and
+    // the sighash differ between the Orchard (v5) and Ironwood (v6) pools.
     let mut randomizers: Vec<(usize, [u8; 32])> = vec![];
-    Signer::new(pczt.clone())
-        .sign_orchard_with(|_pczt, bundle, _| -> Result<(), OrchardParseError> {
-            collect_randomizers(bundle, &mut randomizers);
-            Ok(())
-        })
-        .map_err(|e| eyre!("sign_orchard_with (extract): {e:?}"))?;
+    let extractor = Signer::new(pczt.clone());
+    match version {
+        TxVersion::V6 => extractor
+            .sign_ironwood_with(|_pczt, bundle, _| -> Result<(), OrchardParseError> {
+                collect_randomizers(bundle, &mut randomizers);
+                Ok(())
+            })
+            .map_err(|e| eyre!("sign_ironwood_with (extract): {e:?}"))?,
+        _ => extractor
+            .sign_orchard_with(|_pczt, bundle, _| -> Result<(), OrchardParseError> {
+                collect_randomizers(bundle, &mut randomizers);
+                Ok(())
+            })
+            .map_err(|e| eyre!("sign_orchard_with (extract): {e:?}"))?,
+    };
 
     let signatures = prompt_for_signatures(&randomizers)?;
 
     // Pass 2: inject each externally-produced RedPallas signature. `apply_signature`
     // verifies it against the spend's rk before accepting.
-    let signed = Signer::new(pczt.clone())
-        .sign_orchard_with(|_pczt, bundle, _| apply_signatures(bundle, sighash, &signatures))
-        .map_err(|e| eyre!("sign_orchard_with (apply): {e:?}"))?;
+    let extractor = Signer::new(pczt.clone());
+    let signed = match version {
+        TxVersion::V6 => extractor
+            .sign_ironwood_with(|_pczt, bundle, _| apply_signatures(bundle, sighash, &signatures))
+            .map_err(|e| eyre!("sign_ironwood_with (apply): {e:?}"))?,
+        _ => extractor
+            .sign_orchard_with(|_pczt, bundle, _| apply_signatures(bundle, sighash, &signatures))
+            .map_err(|e| eyre!("sign_orchard_with (apply): {e:?}"))?,
+    };
 
     signed
         .finish()
