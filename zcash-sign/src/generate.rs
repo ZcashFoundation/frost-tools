@@ -16,5 +16,11 @@ pub fn generate(rng: &mut impl RngCore, ak: &SpendValidatingKey) -> FullViewingK
         }
     };
 
-    FullViewingKey::from_sk_ak(&sk, ak.clone())
+    // Conrado (ZF) directed us to keep this non-quantum-recoverable constructor
+    // for now (frost-tools#591); it is the same key derivation, only renamed
+    // upstream with strong caveats. Quantum recoverability is deferred.
+    FullViewingKey::from_sk_ak_incompatible_with_quantum_recoverability_and_will_be_removed(
+        &sk,
+        ak.clone(),
+    )
 }

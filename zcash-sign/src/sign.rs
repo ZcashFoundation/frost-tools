@@ -1,23 +1,44 @@
 use std::error::Error;
 
 use eyre::eyre;
-use pczt::{roles::low_level_signer::Signer, Pczt};
+use pczt::{
+    roles::low_level_signer::{OrchardParseError, Signer},
+    Pczt,
+};
 use rand_core::{CryptoRng, RngCore};
 
 use halo2_proofs::pasta::group::ff::PrimeField;
-use orchard::{
-    primitives::redpallas::{self, SpendAuth},
-    value::NoteValue,
-};
+use orchard::primitives::redpallas::{self, SpendAuth};
 use zcash_keys::keys::UnifiedFullViewingKey;
-use zcash_primitives::transaction::{sighash::SignableInput, txid::TxIdDigester};
-use zcash_primitives::transaction::{sighash_v5::v5_signature_hash, TxVersion};
+use zcash_primitives::transaction::{
+    sighash::SignableInput, sighash_v5::v5_signature_hash, txid::TxIdDigester, TxVersion,
+};
 
 use crate::transaction_plan::TransactionPlan;
 
+// The ECC-stack bump grows `Pczt` enough to trip `large_enum_variant`, which was not
+// triggered by the previous versions. Boxing a variant would change this crate's public
+// API, which is out of scope for a dependency bump; allowed here instead.
+#[allow(clippy::large_enum_variant)]
 pub enum Input {
     YwalletTxPlan(TransactionPlan),
     Pczt(Pczt),
+}
+
+/// Closure error for the low-level signer. `sign_orchard_with` requires
+/// `E: From<OrchardParseError>`; the apply pass also needs to carry an
+/// `apply_signature` failure. Both variants are surfaced through their `Debug`
+/// formatting in the `eyre!` messages at the call sites.
+#[derive(Debug)]
+enum SignErr {
+    Parse(#[allow(dead_code)] OrchardParseError),
+    Apply(#[allow(dead_code)] orchard::pczt::SignerError),
+}
+
+impl From<OrchardParseError> for SignErr {
+    fn from(e: OrchardParseError) -> Self {
+        SignErr::Parse(e)
+    }
 }
 
 /// Sign a transaction plan with externally-generated signatures.
@@ -43,79 +64,101 @@ fn sign_pczt(
     _network: zcash_protocol::consensus::Network,
     pczt: &Pczt,
 ) -> Result<Vec<u8>, Box<dyn Error>> {
-    let sighash = match pczt.clone().into_effects() {
-        None => Err(eyre!(
-            "Not enough information to build the transaction's effects"
-        ))?,
-        Some(tx_data) => {
-            let txid_parts = tx_data.digest(TxIdDigester);
-            if matches!(tx_data.version(), TxVersion::V5)
-                && (tx_data.sapling_bundle().is_some() || tx_data.orchard_bundle().is_some())
-            {
-                v5_signature_hash(&tx_data, &SignableInput::Shielded, &txid_parts)
-            } else {
-                Err(eyre!(
-                    "Only version 5 transactions with shielded components are supported"
-                ))?
-            }
+    let tx_data = pczt
+        .clone()
+        .into_effects()
+        .map_err(|e| eyre!("Not enough information to build the transaction's effects: {e:?}"))?;
+    let txid_parts = tx_data.digest(TxIdDigester);
+
+    let sighash = match tx_data.version() {
+        TxVersion::V5 if tx_data.orchard_bundle().is_some() => {
+            v5_signature_hash(&tx_data, &SignableInput::Shielded, &txid_parts)
         }
+        _ => Err(eyre!(
+            "Only version 5 transactions with shielded Orchard components are supported"
+        ))?,
     };
+    let sighash: [u8; 32] = sighash
+        .as_ref()
+        .try_into()
+        .map_err(|_| eyre!("unexpected sighash length"))?;
 
     println!("SIGHASH: {}", hex::encode(sighash));
 
-    let signer = Signer::new(pczt.clone());
-
-    let mut alphas = vec![];
-    signer
-        .sign_orchard_with(|_pczt, bundle, _| {
-            alphas = bundle
-                .actions()
-                .iter()
-                .enumerate()
-                // TODO: remove unwrap
-                .filter_map(|(idx, a)| {
-                    // TODO: improve dummy detection (check rk instead)
-                    if a.spend().value().unwrap() != NoteValue::default() {
-                        Some((idx, a.spend().alpha().unwrap()))
-                    } else {
-                        None
-                    }
-                })
-                .collect::<Vec<_>>();
-            Ok::<_, orchard::pczt::ParseError>(())
+    // Pass 1: read the randomizer (alpha) of each real spend awaiting a signature.
+    let mut randomizers: Vec<(usize, [u8; 32])> = vec![];
+    Signer::new(pczt.clone())
+        .sign_orchard_with(|_pczt, bundle, _| -> Result<(), OrchardParseError> {
+            collect_randomizers(bundle, &mut randomizers);
+            Ok(())
         })
-        .unwrap();
+        .map_err(|e| eyre!("sign_orchard_with (extract): {e:?}"))?;
 
+    let signatures = prompt_for_signatures(&randomizers)?;
+
+    // Pass 2: inject each externally-produced RedPallas signature. `apply_signature`
+    // verifies it against the spend's rk before accepting.
+    let signed = Signer::new(pczt.clone())
+        .sign_orchard_with(|_pczt, bundle, _| apply_signatures(bundle, sighash, &signatures))
+        .map_err(|e| eyre!("sign_orchard_with (apply): {e:?}"))?;
+
+    signed
+        .finish()
+        .serialize()
+        .map_err(|e| eyre!("failed to serialize signed PCZT: {e:?}").into())
+}
+
+/// Collect `(action index, alpha)` for every real spend still awaiting a signature.
+/// A real spend has `spend_auth_sig == None` (dummies were signed by the IO finalizer
+/// during `pczt create`) and carries its randomizer `alpha`.
+fn collect_randomizers(bundle: &mut orchard::pczt::Bundle, out: &mut Vec<(usize, [u8; 32])>) {
+    for (idx, action) in bundle.actions_mut().iter().enumerate() {
+        if action.spend().spend_auth_sig().is_none() {
+            if let Some(alpha) = action.spend().alpha() {
+                let repr = alpha.to_repr();
+                let bytes: [u8; 32] = AsRef::<[u8]>::as_ref(&repr)
+                    .try_into()
+                    .expect("a Pallas scalar repr is 32 bytes");
+                out.push((idx, bytes));
+            }
+        }
+    }
+}
+
+/// Apply each 64-byte RedPallas signature to the action at the given index.
+fn apply_signatures(
+    bundle: &mut orchard::pczt::Bundle,
+    sighash: [u8; 32],
+    signatures: &[(usize, [u8; 64])],
+) -> Result<(), SignErr> {
+    let actions = bundle.actions_mut();
+    for (idx, sig) in signatures {
+        let signature = redpallas::Signature::<SpendAuth>::from(*sig);
+        actions[*idx]
+            .apply_signature(sighash, signature)
+            .map_err(SignErr::Apply)?;
+    }
+    Ok(())
+}
+
+/// The index of an action within its bundle, paired with the 64-byte signature for it.
+type IndexedSignature = (usize, [u8; 64]);
+
+/// Print each randomizer and read the corresponding hex-encoded signature from stdin.
+fn prompt_for_signatures(
+    randomizers: &[(usize, [u8; 32])],
+) -> Result<Vec<IndexedSignature>, Box<dyn Error>> {
     let mut signatures = vec![];
-    for (idx, alpha) in alphas.iter() {
-        println!(
-            "Randomizer #{}: {}",
-            idx,
-            hex::encode::<&[u8]>(alpha.to_repr().as_ref())
-        );
-        let mut buffer = String::new();
-        let stdin = std::io::stdin();
+    for (idx, alpha) in randomizers {
+        println!("Randomizer #{idx}: {}", hex::encode(alpha));
         println!("Input hex-encoded signature #{idx}: ");
-        stdin.read_line(&mut buffer).unwrap();
-        let signature = hex::decode(buffer.trim()).unwrap();
-        let signature: [u8; 64] = signature.try_into().unwrap();
-        let signature = redpallas::Signature::<SpendAuth>::from(signature);
+        let mut buffer = String::new();
+        std::io::stdin().read_line(&mut buffer)?;
+        let signature = hex::decode(buffer.trim())?;
+        let signature: [u8; 64] = signature
+            .try_into()
+            .map_err(|_| eyre!("signature #{idx} must be 64 bytes"))?;
         signatures.push((*idx, signature));
     }
-
-    let signer = Signer::new(pczt.clone());
-    let signer = signer
-        .sign_orchard_with(|_pczt, bundle, _| {
-            for (idx, signature) in signatures.into_iter() {
-                let action = &mut bundle.actions_mut()[idx];
-                action
-                    .apply_signature(sighash.as_bytes().try_into().unwrap(), signature)
-                    .unwrap();
-            }
-            Ok::<_, orchard::pczt::ParseError>(())
-        })
-        .map_err(|e| eyre!("Error signing: {:?}", e))?;
-    let pczt = signer.finish();
-
-    Ok(pczt.serialize())
+    Ok(signatures)
 }
