@@ -103,38 +103,54 @@ fn sign_pczt(
     println!("SIGHASH: {}", hex::encode(sighash));
 
     // Pass 1: read the randomizer (alpha) of each real spend awaiting a signature.
-    // The bundle is Orchard-shaped in both cases; only the signer entry point and
-    // the sighash differ between the Orchard (v5) and Ironwood (v6) pools.
-    let mut randomizers: Vec<(usize, [u8; 32])> = vec![];
-    let extractor = Signer::new(pczt.clone());
-    match version {
-        TxVersion::V6 => extractor
-            .sign_ironwood_with(|_pczt, bundle, _| -> Result<(), OrchardParseError> {
-                collect_randomizers(bundle, &mut randomizers);
-                Ok(())
-            })
-            .map_err(|e| eyre!("sign_ironwood_with (extract): {e:?}"))?,
-        _ => extractor
-            .sign_orchard_with(|_pczt, bundle, _| -> Result<(), OrchardParseError> {
-                collect_randomizers(bundle, &mut randomizers);
-                Ok(())
-            })
-            .map_err(|e| eyre!("sign_orchard_with (extract): {e:?}"))?,
-    };
+    // The bundle is Orchard-shaped in every pool; only the signer entry point and the
+    // sighash differ.
+    let mut randomizers: Vec<PoolRandomizer> = vec![];
+    for &pool in pools_for(version) {
+        let extractor = Signer::new(pczt.clone());
+        let mut found: Vec<(usize, [u8; 32])> = vec![];
+        let signed = match pool {
+            Pool::Ironwood => {
+                extractor.sign_ironwood_with(|_pczt, bundle, _| -> Result<(), OrchardParseError> {
+                    collect_randomizers(bundle, &mut found);
+                    Ok(())
+                })
+            }
+            Pool::Orchard => {
+                extractor.sign_orchard_with(|_pczt, bundle, _| -> Result<(), OrchardParseError> {
+                    collect_randomizers(bundle, &mut found);
+                    Ok(())
+                })
+            }
+        };
+        signed.map_err(|e| eyre!("{} (extract): {e:?}", pool.signer_name()))?;
+        randomizers.extend(found.into_iter().map(|(idx, alpha)| (pool, idx, alpha)));
+    }
 
     let signatures = prompt_for_signatures(&randomizers)?;
 
     // Pass 2: inject each externally-produced RedPallas signature. `apply_signature`
-    // verifies it against the spend's rk before accepting.
-    let extractor = Signer::new(pczt.clone());
-    let signed = match version {
-        TxVersion::V6 => extractor
-            .sign_ironwood_with(|_pczt, bundle, _| apply_signatures(bundle, sighash, &signatures))
-            .map_err(|e| eyre!("sign_ironwood_with (apply): {e:?}"))?,
-        _ => extractor
-            .sign_orchard_with(|_pczt, bundle, _| apply_signatures(bundle, sighash, &signatures))
-            .map_err(|e| eyre!("sign_orchard_with (apply): {e:?}"))?,
-    };
+    // verifies it against the spend's rk before accepting. Each pool's bundle is
+    // signed in its own pass, with only the signatures belonging to that pool.
+    let mut signed = Signer::new(pczt.clone());
+    for &pool in pools_for(version) {
+        let for_pool: Vec<IndexedSignature> = signatures
+            .iter()
+            .filter(|(p, _, _)| *p == pool)
+            .map(|(_, idx, sig)| (*idx, *sig))
+            .collect();
+        if for_pool.is_empty() {
+            continue;
+        }
+        signed = match pool {
+            Pool::Ironwood => signed.sign_ironwood_with(|_pczt, bundle, _| {
+                apply_signatures(bundle, sighash, &for_pool)
+            }),
+            Pool::Orchard => signed
+                .sign_orchard_with(|_pczt, bundle, _| apply_signatures(bundle, sighash, &for_pool)),
+        }
+        .map_err(|e| eyre!("{} (apply): {e:?}", pool.signer_name()))?;
+    }
 
     signed
         .finish()
@@ -175,24 +191,74 @@ fn apply_signatures(
     Ok(())
 }
 
+/// Which Orchard-protocol bundle of the transaction a spend lives in.
+///
+/// A v6 transaction has two such bundles and either may carry spends: a ZIP 318
+/// Orchard-to-Ironwood migration spends from the *Orchard* pool while its only output is
+/// in the *Ironwood* pool. The two are reached through different signer entry points, and
+/// asking for the wrong one yields no spends rather than an error, so the pool a spend
+/// belongs to has to be tracked alongside its action index.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Pool {
+    Orchard,
+    Ironwood,
+}
+
+impl Pool {
+    /// The `pczt` signer entry point for this pool, for use in error messages.
+    fn signer_name(self) -> &'static str {
+        match self {
+            Pool::Orchard => "sign_orchard_with",
+            Pool::Ironwood => "sign_ironwood_with",
+        }
+    }
+
+    /// The lowercase pool name, used to disambiguate prompts.
+    fn label(self) -> &'static str {
+        match self {
+            Pool::Orchard => "orchard",
+            Pool::Ironwood => "ironwood",
+        }
+    }
+}
+
+/// The bundles that may carry spends in a transaction of the given version.
+///
+/// Before NU6.3 there is no Ironwood bundle. From v6 onward both may be populated, so both
+/// are inspected; a bundle with no spends awaiting signature simply contributes none.
+fn pools_for(version: TxVersion) -> &'static [Pool] {
+    match version {
+        TxVersion::V6 => &[Pool::Orchard, Pool::Ironwood],
+        _ => &[Pool::Orchard],
+    }
+}
+
+/// A spend awaiting signature: its pool, its action index within that pool's bundle, and
+/// its randomizer.
+type PoolRandomizer = (Pool, usize, [u8; 32]);
+
 /// The index of an action within its bundle, paired with the 64-byte signature for it.
 type IndexedSignature = (usize, [u8; 64]);
 
+/// A signature paired with the pool and action index it applies to.
+type PoolSignature = (Pool, usize, [u8; 64]);
+
 /// Print each randomizer and read the corresponding hex-encoded signature from stdin.
 fn prompt_for_signatures(
-    randomizers: &[(usize, [u8; 32])],
-) -> Result<Vec<IndexedSignature>, Box<dyn Error>> {
+    randomizers: &[PoolRandomizer],
+) -> Result<Vec<PoolSignature>, Box<dyn Error>> {
     let mut signatures = vec![];
-    for (idx, alpha) in randomizers {
-        println!("Randomizer #{idx}: {}", hex::encode(alpha));
-        println!("Input hex-encoded signature #{idx}: ");
+    for (pool, idx, alpha) in randomizers {
+        let pool_label = pool.label();
+        println!("Randomizer #{idx} ({pool_label}): {}", hex::encode(alpha));
+        println!("Input hex-encoded signature #{idx} ({pool_label}): ");
         let mut buffer = String::new();
         std::io::stdin().read_line(&mut buffer)?;
         let signature = hex::decode(buffer.trim())?;
         let signature: [u8; 64] = signature
             .try_into()
             .map_err(|_| eyre!("signature #{idx} must be 64 bytes"))?;
-        signatures.push((*idx, signature));
+        signatures.push((*pool, *idx, signature));
     }
     Ok(signatures)
 }
