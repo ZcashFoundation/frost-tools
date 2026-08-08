@@ -60,21 +60,21 @@ pub fn sign(
     }
 }
 
-fn sign_pczt(
-    _rng: impl RngCore + CryptoRng,
-    _network: zcash_protocol::consensus::Network,
-    pczt: &Pczt,
-) -> Result<Vec<u8>, Box<dyn Error>> {
+/// Compute the version-appropriate signature hash for `pczt`, returned alongside the
+/// transaction version that the rest of the signing flow dispatches on.
+///
+/// Ironwood spends live in v6 transactions, whose sighash commits to the Ironwood
+/// bundle. Using the v5 hash for a v6 transaction yields a hash the transaction
+/// extractor rejects (`SighashMismatch`), and that only surfaces at broadcast — so the
+/// dispatch is pinned by the tests at the bottom of this file against a real v6
+/// Ironwood transaction.
+fn sighash_for_pczt(pczt: &Pczt) -> Result<(TxVersion, [u8; 32]), Box<dyn Error>> {
     let tx_data = pczt
         .clone()
         .into_effects()
         .map_err(|e| eyre!("Not enough information to build the transaction's effects: {e:?}"))?;
     let txid_parts = tx_data.digest(TxIdDigester);
 
-    // Dispatch the sighash by transaction version: Ironwood spends live in v6
-    // transactions, whose sighash includes the Ironwood bundle. Using the v5 hash
-    // for a v6 transaction yields a hash the transaction extractor rejects
-    // (SighashMismatch), and that only surfaces at broadcast.
     let version = tx_data.version();
     let sighash = match version {
         TxVersion::V6 => v6_signature_hash(&tx_data, &SignableInput::Shielded, &txid_parts),
@@ -89,6 +89,16 @@ fn sign_pczt(
         .as_ref()
         .try_into()
         .map_err(|_| eyre!("unexpected sighash length"))?;
+
+    Ok((version, sighash))
+}
+
+fn sign_pczt(
+    _rng: impl RngCore + CryptoRng,
+    _network: zcash_protocol::consensus::Network,
+    pczt: &Pczt,
+) -> Result<Vec<u8>, Box<dyn Error>> {
+    let (version, sighash) = sighash_for_pczt(pczt)?;
 
     println!("SIGHASH: {}", hex::encode(sighash));
 
@@ -185,4 +195,61 @@ fn prompt_for_signatures(
         signatures.push((*idx, signature));
     }
     Ok(signatures)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A real, proven, not-yet-signed v6 Ironwood PCZT: the one that became testnet
+    /// transaction `a5533fe75575b09d8986a05005d2c0528cf45a1a7e4cc71b304ae76a9e14487d`,
+    /// whose Orchard spend was authorized by a 2-of-3 rerandomized FROST signature.
+    const IRONWOOD_V6_PCZT: &[u8] = include_bytes!("../tests/fixtures/ironwood_v6.pczt");
+
+    /// The v6 sighash that transaction was actually signed against. For a fully
+    /// shielded transaction with no transparent inputs, ZIP 244 makes the txid the
+    /// byte-reversal of this value, which is how it can be checked against the chain.
+    const IRONWOOD_V6_SIGHASH: &str =
+        "7d48149e6ae74a301bc74c7e1a5af48c52c0d20550a086899db07555e73f53a5";
+
+    fn fixture() -> Pczt {
+        Pczt::parse(IRONWOOD_V6_PCZT).expect("fixture is a valid PCZT")
+    }
+
+    #[test]
+    fn ironwood_fixture_is_a_v6_transaction() {
+        let (version, _) = sighash_for_pczt(&fixture()).expect("fixture yields a sighash");
+        assert_eq!(
+            version,
+            TxVersion::V6,
+            "Ironwood spends must be carried in v6 transactions"
+        );
+    }
+
+    /// The dispatch must select the v6 sighash for a v6 transaction. This is the
+    /// regression guard: `apply_signature` verifies a signature against whatever
+    /// sighash it is handed, so signing a v6 transaction with the v5 hash succeeds
+    /// locally and is only rejected at broadcast, as `SighashMismatch`.
+    #[test]
+    fn v6_transaction_gets_the_v6_sighash() {
+        let (_, sighash) = sighash_for_pczt(&fixture()).expect("fixture yields a sighash");
+        assert_eq!(hex::encode(sighash), IRONWOOD_V6_SIGHASH);
+    }
+
+    /// The failure this dispatch exists to prevent: the v5 hash over the same
+    /// transaction is a different value, so using it would produce a signature the
+    /// extractor rejects.
+    #[test]
+    fn v5_sighash_over_a_v6_transaction_is_wrong() {
+        let tx_data = fixture()
+            .into_effects()
+            .expect("fixture yields transaction effects");
+        let txid_parts = tx_data.digest(TxIdDigester);
+        let v5 = v5_signature_hash(&tx_data, &SignableInput::Shielded, &txid_parts);
+        assert_ne!(
+            hex::encode(v5.as_ref()),
+            IRONWOOD_V6_SIGHASH,
+            "if these ever match, this test no longer guards anything"
+        );
+    }
 }
