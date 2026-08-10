@@ -13,10 +13,10 @@ use frost_core::{
     keys::KeyPackage,
     round1::SigningNonces,
     round2::{self, SignatureShare},
-    Error,
 };
 use frost_ed25519::Ed25519Sha512;
 use frost_rerandomized::RandomizedCiphersuite;
+use itertools::izip;
 use rand::thread_rng;
 use reddsa::frost::redpallas::PallasBlake2b512;
 use std::io::{BufRead, Write};
@@ -26,24 +26,37 @@ pub fn generate_signature<C: frost_rerandomized::RandomizedCiphersuite>(
     config: SendSigningPackageArgs<C>,
     key_package: &KeyPackage<C>,
     signing_nonces: &[SigningNonces<C>],
-) -> Result<Vec<SignatureShare<C>>, Error<C>> {
-    let signatures = config
-        .signing_package
-        .iter()
-        .zip(signing_nonces.iter())
-        .map(|(signing_package, signing_nonces)| {
-            if !config.randomizer.is_empty() {
-                frost_rerandomized::sign::<C>(
-                    signing_package,
-                    signing_nonces,
-                    key_package,
-                    config.randomizer[0],
-                )
-            } else {
+) -> Result<Vec<SignatureShare<C>>, Box<dyn std::error::Error>> {
+    if signing_nonces.len() != config.signing_package.len() {
+        return Err("Number of nonces must match number of signing packages".into());
+    }
+    // A rerandomized session has one randomizer per message; each signing
+    // package must be signed with its own randomizer, otherwise the
+    // coordinator will not be able to aggregate the shares.
+    if !config.randomizer.is_empty() && config.randomizer.len() != config.signing_package.len() {
+        return Err("Number of randomizers must match number of signing packages".into());
+    }
+
+    let signatures = if config.randomizer.is_empty() {
+        config
+            .signing_package
+            .iter()
+            .zip(signing_nonces.iter())
+            .map(|(signing_package, signing_nonces)| {
                 round2::sign(signing_package, signing_nonces, key_package)
-            }
+            })
+            .collect::<Result<Vec<_>, _>>()?
+    } else {
+        izip!(
+            config.signing_package.iter(),
+            signing_nonces.iter(),
+            config.randomizer.iter()
+        )
+        .map(|(signing_package, signing_nonces, randomizer)| {
+            frost_rerandomized::sign::<C>(signing_package, signing_nonces, key_package, *randomizer)
         })
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect::<Result<Vec<_>, _>>()?
+    };
     Ok(signatures)
 }
 

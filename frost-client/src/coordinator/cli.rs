@@ -83,9 +83,8 @@ pub async fn coordinator<C: RandomizedCiphersuite + 'static>(
                     &pargs.public_key_package,
                     randomizer_param,
                 )
-                .unwrap()
             })
-            .collect::<Vec<Signature<C>>>()
+            .collect::<Result<Vec<Signature<C>>, _>>()?
         } else {
             signing_packages
                 .iter()
@@ -96,9 +95,8 @@ pub async fn coordinator<C: RandomizedCiphersuite + 'static>(
                         signature_share,
                         &pargs.public_key_package,
                     )
-                    .unwrap()
                 })
-                .collect::<Vec<Signature<C>>>()
+                .collect::<Result<Vec<Signature<C>>, _>>()?
         };
 
         comms.process_signature(&signatures).await?;
