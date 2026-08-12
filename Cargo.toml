@@ -33,7 +33,7 @@ hex = "0.4.3"
 itertools = "0.14.0"
 lazy_static = "1.5.0"
 message-io = "0.18"
-orchard = "0.15.0"
+orchard = "0.15.5"
 pczt = "0.8.0-rc.1"
 postcard = "1.1.1"
 rand = "0.8.5"
@@ -75,8 +75,4 @@ zeroize = "1.8.1"
 # TODO: remove this when https://github.com/zcash/orchard/pull/475 is merged,
 # and all ECC crates are updated to point to the orchard version that includes
 # it.
-# Interim pin: orchard 0.15.0 rebased with the FROST `from_sk_ak` constructor
-# (https://github.com/zcash/orchard/pull/475). This is the same commit as
-# conradoplg/orchard `apply-signature`, re-applied on top of the 0.15.0 tag;
-# once that branch is itself rebased to 0.15 this should point there instead.
-orchard = { git = "https://github.com/aryaethn/orchard.git", rev = "962960e93c59eb30813c5a1c74b4361eb915663b" }
+orchard = { git = "https://github.com/conradoplg/orchard.git", rev = "42015f15733b95e179189628d6fa34d92b5b3b8b", features = ["unstable-frost"] }
