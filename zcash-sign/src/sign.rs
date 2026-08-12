@@ -93,6 +93,8 @@ fn sign_pczt(
             idx,
             hex::encode::<&[u8]>(alpha.to_repr().as_ref())
         );
+    }
+    for (idx, _alpha) in alphas.iter() {
         let mut buffer = String::new();
         let stdin = std::io::stdin();
         println!("Input hex-encoded signature #{idx}: ");

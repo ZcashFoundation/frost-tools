@@ -81,64 +81,84 @@ where
 {
     async fn get_signing_commitments(
         &mut self,
-        pub_key_package: &PublicKeyPackage<C>,
-        num_of_participants: u16,
-    ) -> Result<BTreeMap<Identifier<C>, SigningCommitments<C>>, Box<dyn Error>> {
-        let mut participants_list = Vec::new();
-        let mut commitments_list: BTreeMap<Identifier<C>, SigningCommitments<C>> = BTreeMap::new();
+        public_key_package: &PublicKeyPackage<C>,
+        num_participants: u16,
+        num_messages: usize,
+    ) -> Result<Vec<BTreeMap<Identifier<C>, SigningCommitments<C>>>, Box<dyn Error>> {
+        let mut commitments = Vec::new();
+        for _ in 0..num_messages {
+            let mut participants_list = Vec::new();
+            let mut commitments_list: BTreeMap<Identifier<C>, SigningCommitments<C>> =
+                BTreeMap::new();
 
-        for i in 1..=num_of_participants {
-            writeln!(
-                self.writer,
-                "Identifier for participant {i:?} (hex encoded): "
-            )?;
-            let id_value = read_identifier(self.reader)?;
-            validate(id_value, pub_key_package, &participants_list)?;
-            participants_list.push(id_value);
+            for i in 1..=num_participants {
+                writeln!(
+                    self.writer,
+                    "Identifier for participant {i:?} (hex encoded): "
+                )?;
+                let id_value = read_identifier(self.reader)?;
+                validate(id_value, public_key_package, &participants_list)?;
+                participants_list.push(id_value);
 
-            writeln!(
-                self.writer,
-                "Please enter JSON encoded commitments for participant {}:",
-                hex::encode(id_value.serialize())
-            )?;
-            let mut commitments_input = String::new();
-            self.reader.read_line(&mut commitments_input)?;
-            let commitments = serde_json::from_str(&commitments_input)?;
-            commitments_list.insert(id_value, commitments);
+                writeln!(
+                    self.writer,
+                    "Please enter JSON encoded commitments for participant {}:",
+                    hex::encode(id_value.serialize())
+                )?;
+                let mut commitments_input = String::new();
+                self.reader.read_line(&mut commitments_input)?;
+                let commitments = serde_json::from_str(&commitments_input)?;
+                commitments_list.insert(id_value, commitments);
+            }
+
+            print_participants(self.writer, &commitments_list);
+            commitments.push(commitments_list);
         }
 
-        print_participants(self.writer, &commitments_list);
-
-        Ok(commitments_list)
+        Ok(commitments)
     }
 
     async fn send_signing_package_and_get_signature_shares(
         &mut self,
-        signing_package: &SigningPackage<C>,
-        randomizer: Option<frost_rerandomized::Randomizer<C>>,
-    ) -> Result<BTreeMap<Identifier<C>, SignatureShare<C>>, Box<dyn Error>> {
-        print_signing_package(self.writer, signing_package);
-        if randomizer.is_some() {
+        signing_packages: &[SigningPackage<C>],
+        randomizers: Option<&[frost_rerandomized::Randomizer<C>]>,
+        aux_msg: Option<Vec<u8>>,
+    ) -> Result<Vec<BTreeMap<Identifier<C>, SignatureShare<C>>>, Box<dyn Error>> {
+        // TODO: support?
+        if randomizers.is_some() {
             panic!("rerandomized not supported");
         }
-        let mut signatures_list: BTreeMap<Identifier<C>, SignatureShare<C>> = BTreeMap::new();
-        for p in signing_package.signing_commitments().keys() {
-            writeln!(
-                self.writer,
-                "Please enter JSON encoded signature shares for participant {}:",
-                hex::encode(p.serialize())
-            )?;
-
-            let mut signature_input = String::new();
-            self.reader.read_line(&mut signature_input)?;
-            let signatures = serde_json::from_str(&signature_input)?;
-            signatures_list.insert(*p, signatures);
+        if aux_msg.is_some() {
+            panic!("auxiliary message not supported");
         }
-        Ok(signatures_list)
+        let mut signatures_shares = Vec::new();
+        for signing_package in signing_packages {
+            print_signing_package(self.writer, signing_package);
+            let mut signatures_list: BTreeMap<Identifier<C>, SignatureShare<C>> = BTreeMap::new();
+            for p in signing_package.signing_commitments().keys() {
+                writeln!(
+                    self.writer,
+                    "Please enter JSON encoded signature shares for participant {}:",
+                    hex::encode(p.serialize())
+                )?;
+
+                let mut signature_input = String::new();
+                self.reader.read_line(&mut signature_input)?;
+                let signatures = serde_json::from_str(&signature_input)?;
+                signatures_list.insert(*p, signatures);
+            }
+            signatures_shares.push(signatures_list);
+        }
+        Ok(signatures_shares)
     }
 
-    async fn process_signature(&mut self, signature: &Signature<C>) -> Result<(), Box<dyn Error>> {
-        print_signature(self.writer, *signature)?;
+    async fn process_signature(
+        &mut self,
+        signatures: &[Signature<C>],
+    ) -> Result<(), Box<dyn Error>> {
+        for signature in signatures {
+            print_signature(self.writer, *signature)?;
+        }
         Ok(())
     }
 }

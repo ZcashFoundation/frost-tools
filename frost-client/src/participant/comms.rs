@@ -38,11 +38,17 @@ pub enum Message<C: Ciphersuite> {
 
 #[async_trait(?Send)]
 pub trait Comms<C: Ciphersuite> {
+    async fn get_message_count(
+        &mut self,
+        input: &mut dyn BufRead,
+        output: &mut dyn Write,
+    ) -> Result<u8, Box<dyn Error>>;
+
     async fn get_signing_package(
         &mut self,
         input: &mut dyn BufRead,
         output: &mut dyn Write,
-        commitments: SigningCommitments<C>,
+        commitments: &[SigningCommitments<C>],
         identifier: Identifier<C>,
         rerandomized: bool,
     ) -> Result<SendSigningPackageArgs<C>, Box<dyn Error>>;
@@ -60,15 +66,17 @@ pub trait Comms<C: Ciphersuite> {
         output: &mut dyn Write,
         signing_package: &SendSigningPackageArgs<C>,
     ) -> Result<(), Box<dyn Error>> {
-        writeln!(
-            output,
-            "Message to be signed (hex-encoded):\n{}\nDo you want to sign it? (y/n)",
-            hex::encode(signing_package.signing_package[0].message())
-        )?;
-        let mut sign_it = String::new();
-        input.read_line(&mut sign_it)?;
-        if sign_it.trim() != "y" {
-            return Err(eyre!("signing cancelled").into());
+        for signing_package in &signing_package.signing_package {
+            writeln!(
+                output,
+                "Message to be signed (hex-encoded):\n{}\nDo you want to sign it? (y/n)",
+                hex::encode(signing_package.message())
+            )?;
+            let mut sign_it = String::new();
+            input.read_line(&mut sign_it)?;
+            if sign_it.trim() != "y" {
+                return Err(eyre!("signing cancelled").into());
+            }
         }
         Ok(())
     }
@@ -76,6 +84,6 @@ pub trait Comms<C: Ciphersuite> {
     async fn send_signature_share(
         &mut self,
         identifier: Identifier<C>,
-        signature_share: SignatureShare<C>,
+        signature_share: &[SignatureShare<C>],
     ) -> Result<(), Box<dyn Error>>;
 }

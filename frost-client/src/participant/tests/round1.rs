@@ -11,7 +11,7 @@ use frost::{
 };
 use participant::{
     args::Args,
-    round1::{print_values, request_inputs, Round1Config},
+    round1::{print_values, request_inputs},
 };
 
 use rand::thread_rng;
@@ -33,9 +33,7 @@ async fn build_key_package() -> KeyPackage {
 
 #[tokio::test]
 async fn check_valid_round_1_inputs() {
-    let config = Round1Config {
-        key_package: build_key_package().await,
-    };
+    let expected_key_package = build_key_package().await;
 
     let mut buf = BufWriter::new(Vec::new());
     let args = Args {
@@ -49,11 +47,11 @@ async fn check_valid_round_1_inputs() {
     let input = SECRET_SHARE_JSON;
     let mut valid_input = input.as_bytes();
 
-    let expected = request_inputs(&args, &mut valid_input, &mut buf)
+    let result_key_package = request_inputs(&args, &mut valid_input, &mut buf)
         .await
         .unwrap();
 
-    assert_eq!(expected, config);
+    assert_eq!(result_key_package, expected_key_package);
 }
 
 #[tokio::test]
