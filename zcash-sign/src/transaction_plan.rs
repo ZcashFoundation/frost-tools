@@ -21,8 +21,8 @@ use serde_hex::Strict;
 use serde_with::serde_as;
 use zcash_encoding::Optional;
 use zcash_encoding::Vector;
-use zcash_primitives::legacy::TransparentAddress;
 use zcash_protocol::memo::MemoBytes;
+use zcash_transparent::address::TransparentAddress;
 
 pub type Hash = [u8; 32];
 
