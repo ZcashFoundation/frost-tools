@@ -115,7 +115,7 @@ pub fn print_values<C: Ciphersuite>(
         }
     } else {
         fs::write(&args.public_key_package, serde_json::to_vec(pubkeys)?)?;
-        eprintln!("Public key package written to {}", &args.public_key_package);
+        eprintln!("Public key package written to {}", args.public_key_package);
 
         for (i, (k, v)) in keys.iter().sorted_by_key(|x| x.0).enumerate() {
             let path = str::replace(&args.key_package, "{}", format!("{}", i + 1).as_str());
@@ -123,7 +123,7 @@ pub fn print_values<C: Ciphersuite>(
             eprintln!(
                 "Key package for participant {} written to {}",
                 hex::encode(k.serialize()),
-                &path
+                path
             );
         }
     }
