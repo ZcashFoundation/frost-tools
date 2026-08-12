@@ -91,7 +91,7 @@ async fn trusted_dealer_journey() {
 
         let round_1_input = format!(
             "{}\n",
-            &serde_json::to_string(&key_packages[&participant_identifier]).unwrap()
+            serde_json::to_string(&key_packages[&participant_identifier]).unwrap()
         );
         let round_1_config =
             participant_input_round_1(&participant_args, &mut round_1_input.as_bytes(), &mut buf)

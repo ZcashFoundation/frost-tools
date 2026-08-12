@@ -163,7 +163,7 @@ pub fn read_messages(
                     input.read_line(&mut msg)?;
                     hex::decode(msg.trim())?
                 } else {
-                    eprintln!("Reading message from {}...", &filename);
+                    eprintln!("Reading message from {}...", filename);
                     fs::read(filename)?
                 };
                 Ok(msg)
@@ -191,7 +191,7 @@ pub fn read_randomizers<C: Ciphersuite + 'static>(
                     let bytes = hex::decode(randomizer.trim())?;
                     frost_rerandomized::Randomizer::deserialize(&bytes)?
                 } else {
-                    eprintln!("Reading randomizer from {}...", &filename);
+                    eprintln!("Reading randomizer from {}...", filename);
                     let bytes = fs::read(filename)?;
                     frost_rerandomized::Randomizer::deserialize(&bytes)?
                 };
