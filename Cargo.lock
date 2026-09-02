@@ -1336,9 +1336,9 @@ dependencies = [
 
 [[package]]
 name = "frost-ed25519"
-version = "2.1.0"
+version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c350ac3d0463a009a061aba12b67920acee94338951c849bb4c492d55223dece"
+checksum = "f73eb5fa9311d33450c2320199ad1663b5af7a50061d9627d2e0dc776f0acb27"
 dependencies = [
  "curve25519-dalek",
  "document-features",
@@ -1350,9 +1350,9 @@ dependencies = [
 
 [[package]]
 name = "frost-rerandomized"
-version = "2.1.0"
+version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e8a3b10d9c1e9f298522510940b5b8c3d55040420517ec8d2bb86c4c2d1ae3ee"
+checksum = "4c5eb1ea58c0250b7ce834337f7b19e0417686d14ffc7f626137dea9149762d4"
 dependencies = [
  "derive-getters",
  "document-features",
@@ -2862,7 +2862,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ac6c3320f9abac597dcbc668774ef006702672474aad53c6d596b62e487b40b1"
 dependencies = [
  "heck 0.5.0",
- "itertools 0.14.0",
+ "itertools 0.12.1",
  "log",
  "multimap",
  "once_cell",
@@ -2882,7 +2882,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9120690fafc389a67ba3803df527d0ec9cbbc9cc45e4cc20b332996dfb672425"
 dependencies = [
  "anyhow",
- "itertools 0.14.0",
+ "itertools 0.12.1",
  "proc-macro2",
  "quote",
  "syn 2.0.98",
