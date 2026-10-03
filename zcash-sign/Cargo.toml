@@ -28,3 +28,9 @@ zcash_primitives = { workspace = true }
 zcash_proofs = { workspace = true, features = ["bundled-prover"] }
 zcash_protocol = { workspace = true }
 zcash_transparent = { workspace = true, features = ["transparent-inputs"] }
+
+[dev-dependencies]
+blake2b_simd = { workspace = true }
+blake3 = { workspace = true }
+ff = { workspace = true }
+pasta_curves = { workspace = true }
