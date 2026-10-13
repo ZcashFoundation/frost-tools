@@ -51,9 +51,9 @@ pub struct Args {
 
     /// The randomizers to use. Each instance can be a file with the raw
     /// randomizer, "" or "-". If "" or "-" is specified, then it will be read
-    /// from standard input as a hex string. If none are passed, random ones
-    /// will be generated. If one or more are passed, the number should match
-    /// the `message` parameter.
+    /// from standard input as a hex string. If none are passed, the messages
+    /// are signed without rerandomization, even for redpallas. If one or more
+    /// are passed, the number should match the `message` parameter.
     #[arg(short = 'r', long)]
     pub randomizer: Vec<String>,
 
@@ -189,7 +189,7 @@ pub fn read_aux_message(
         input.read_line(&mut msg)?;
         hex::decode(msg.trim())?
     } else {
-        eprintln!("Reading aux message from {}...", &filename);
+        eprintln!("Reading aux message from {}...", filename);
         fs::read(filename)?
     };
     Ok(msg)

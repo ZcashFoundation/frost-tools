@@ -124,12 +124,11 @@ where
         randomizers: Option<&[frost_rerandomized::Randomizer<C>]>,
         aux_msg: Option<Vec<u8>>,
     ) -> Result<Vec<BTreeMap<Identifier<C>, SignatureShare<C>>>, Box<dyn Error>> {
-        // TODO: support?
         if randomizers.is_some() {
-            panic!("rerandomized not supported");
+            return Err("CLIComms does not support rerandomized signing".into());
         }
         if aux_msg.is_some() {
-            panic!("auxiliary message not supported");
+            return Err("CLIComms does not support auxiliary messages".into());
         }
         let mut signatures_shares = Vec::new();
         for signing_package in signing_packages {

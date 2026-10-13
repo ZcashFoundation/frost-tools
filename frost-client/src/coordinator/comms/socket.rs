@@ -77,7 +77,7 @@ impl<C: Ciphersuite> Comms<C> for SocketComms<C> {
     ) -> Result<Vec<BTreeMap<Identifier<C>, SigningCommitments<C>>>, Box<dyn Error>> {
         // TODO: support?
         if num_messages != 1 {
-            panic!("SocketComms only supports one message at a time");
+            return Err(eyre!("SocketComms only supports one message at a time").into());
         }
         self.endpoints = BTreeMap::new();
         let mut signing_commitments = BTreeMap::new();
@@ -109,17 +109,19 @@ impl<C: Ciphersuite> Comms<C> for SocketComms<C> {
         randomizers: Option<&[frost_rerandomized::Randomizer<C>]>,
         aux_msg: Option<Vec<u8>>,
     ) -> Result<Vec<BTreeMap<Identifier<C>, SignatureShare<C>>>, Box<dyn Error>> {
-        if signing_packages.len() != 1 {
-            panic!("SocketComms only supports one message at a time");
-        }
-        if randomizers.is_some() {
-            panic!("SocketComms does not support randomizers");
-        }
+        let [signing_package] = signing_packages else {
+            return Err(eyre!("SocketComms only supports one message at a time").into());
+        };
+        let randomizer = match randomizers {
+            None => None,
+            Some([randomizer]) => Some(*randomizer),
+            Some(_) => {
+                return Err(eyre!("number of randomizers must match number of messages").into())
+            }
+        };
         if aux_msg.is_some() {
-            panic!("SocketComms does not support auxiliary messages");
+            return Err(eyre!("SocketComms does not support auxiliary messages").into());
         }
-        let signing_package = &signing_packages[0];
-        let randomizer = randomizers.map(|r| r[0]);
 
         // Send SigningPackage to all participants
         eprintln!("Sending SigningPackage to participants...");

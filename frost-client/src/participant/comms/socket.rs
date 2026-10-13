@@ -100,10 +100,9 @@ where
         identifier: Identifier<C>,
         _rerandomized: bool,
     ) -> Result<SendSigningPackageArgs<C>, Box<dyn Error>> {
-        if commitments.len() != 1 {
-            panic!("SocketComms currently only supports one message at a time");
-        }
-        let commitments = commitments[0];
+        let [commitments] = *commitments else {
+            return Err(eyre!("SocketComms only supports one message at a time").into());
+        };
         // Send Commitments to Coordinator
         let data = serde_json::to_vec(&Message::<C>::IdentifiedCommitments {
             identifier,
@@ -139,7 +138,9 @@ where
         _identifier: Identifier<C>,
         signature_shares: &[SignatureShare<C>],
     ) -> Result<(), Box<dyn Error>> {
-        let signature_share = signature_shares[0];
+        let [signature_share] = *signature_shares else {
+            return Err(eyre!("SocketComms only supports one message at a time").into());
+        };
         // Send signature shares to Coordinator
         let data = serde_json::to_vec(&Message::SignatureShare(signature_share))?;
         self.handler.network().send(self.endpoint, &data);
