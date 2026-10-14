@@ -15,6 +15,7 @@ use frost_core::{
     Identifier, Signature, SigningPackage,
 };
 use rand::thread_rng;
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use crate::cipher::{Cipher, PrivateKey};
 use crate::client::Client;
@@ -45,6 +46,14 @@ pub struct Args<C: Ciphersuite> {
     /// The coordinator's communication public key for HTTP mode.
     pub comm_pubkey: Option<PublicKey>,
 }
+
+impl<C: Ciphersuite> Drop for Args<C> {
+    fn drop(&mut self) {
+        self.comm_privkey.zeroize();
+    }
+}
+
+impl<C: Ciphersuite> ZeroizeOnDrop for Args<C> {}
 
 pub struct HTTPComms<C: Ciphersuite> {
     client: Client,

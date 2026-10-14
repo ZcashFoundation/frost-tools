@@ -60,8 +60,6 @@ async fn trusted_dealer_journey() {
         ..Default::default()
     };
 
-    // For a CLI test we can use the same CLIComms instance
-    let mut participant_comms = ParticipantCLIComms::new();
     let participant_args = ParticipantArgs::default();
 
     // Trusted dealer
@@ -172,15 +170,13 @@ async fn trusted_dealer_journey() {
     for participant_index in 1..=3 {
         let participant_identifier = Identifier::try_from(participant_index).unwrap();
         let signing_commitments = commitments_map[&participant_identifier];
-        let round_2_input = format!("{}\n", serde_json::to_string(&signing_package).unwrap());
+        let mut round_2_input = Cursor::new(format!(
+            "{}\n",
+            serde_json::to_string(&signing_package).unwrap()
+        ));
+        let mut participant_comms = ParticipantCLIComms::new(&mut round_2_input, &mut buf);
         let round_2_config = participant_comms
-            .get_signing_package(
-                &mut round_2_input.as_bytes(),
-                &mut buf,
-                &[signing_commitments],
-                participant_identifier,
-                false,
-            )
+            .get_signing_package(&[signing_commitments], participant_identifier, false)
             .await
             .unwrap();
         let signature = generate_signature(
