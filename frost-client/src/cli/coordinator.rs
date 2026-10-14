@@ -46,9 +46,10 @@ pub struct CoordinatorCommand {
     pub message: Vec<String>,
     /// The randomizers to use. Each instance can be a file with the raw
     /// randomizer, "" or "-". If "" or "-" is specified, then it will be
-    /// read from standard input as a hex string. If none are passed, random
-    /// ones will be generated if the ciphersuite is redpallas. If one or
-    /// more are passed, the number should match the `message` parameter.
+    /// read from standard input as a hex string. If none are passed, the
+    /// messages are signed without rerandomization, even for redpallas; for
+    /// Zcash spends you must pass the randomizers (alphas) from the PCZT. If
+    /// one or more are passed, the number should match the `message` parameter.
     #[arg(short = 'r', long)]
     pub randomizer: Vec<String>,
     /// An optional auxiliary message to include in the signing package.
@@ -56,8 +57,10 @@ pub struct CoordinatorCommand {
     pub aux_message: Option<String>,
     /// Where to write the generated raw bytes signatures. Each instance can be
     /// a file path where the raw signature will be written, or "-". If "-" is
-    /// specified, the human-readable hex-string is printed to stdout.
-    #[arg(short = 'o', long, default_value = "")]
+    /// specified, the human-readable hex-string is printed to stdout. If none
+    /// are passed, all signatures are printed to stdout; otherwise the number
+    /// should match the number of messages.
+    #[arg(short = 'o', long)]
     pub signature: Vec<String>,
 }
 
@@ -115,10 +118,6 @@ pub(crate) async fn run_for_ciphersuite<C: RandomizedCiphersuite + 'static>(
     let server_url_parsed =
         Url::parse(&format!("https://{server_url}")).wrap_err("error parsing server-url")?;
 
-    if message.len() != signature_fn.len() {
-        return Err("Number of messages must match number of signature output files".into());
-    }
-
     let signers = signers
         .iter()
         .map(|s| {
@@ -138,6 +137,15 @@ pub(crate) async fn run_for_ciphersuite<C: RandomizedCiphersuite + 'static>(
             .map(|filename| args::read_aux_message(&filename, &mut output, &mut input))
             .transpose()?,
     };
+
+    if !signature_fn.is_empty() && signature_fn.len() != pargs.messages.len() {
+        return Err(eyre!(
+            "number of signature outputs ({}) must match number of messages ({})",
+            signature_fn.len(),
+            pargs.messages.len()
+        )
+        .into());
+    }
 
     let args = crate::coordinator::comms::http::Args {
         signers,
@@ -169,12 +177,18 @@ pub(crate) async fn run_for_ciphersuite<C: RandomizedCiphersuite + 'static>(
 
     let signatures = cli::coordinator(&mut comms, pargs).await?;
 
+    // If no output was specified, print all signatures to stdout.
+    let signature_fn = if signature_fn.is_empty() {
+        vec!["-".to_string(); signatures.len()]
+    } else {
+        signature_fn
+    };
     for (signature, signature_fn) in signatures.iter().zip(signature_fn.iter()) {
-        if signature_fn == "-" || signature_fn.is_empty() {
-            let hex_signature = hex::encode(signature.serialize()?);
-            eprintln!("{hex_signature}");
+        let serialized_signature = signature.serialize()?;
+        if signature_fn.is_empty() || signature_fn == "-" {
+            println!("{}", hex::encode(&serialized_signature));
         } else {
-            fs::write(signature_fn, signature.serialize()?)?;
+            fs::write(signature_fn, &serialized_signature)?;
             eprintln!("Raw signature written to {}", signature_fn);
         }
     }

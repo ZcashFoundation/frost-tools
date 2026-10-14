@@ -74,10 +74,9 @@ where
         _identifier: Identifier<C>,
         rerandomized: bool,
     ) -> Result<SendSigningPackageArgs<C>, Box<dyn Error>> {
-        if commitments.len() != 1 {
-            panic!("CLIComms only supports single message");
-        }
-        let commitments = commitments.first().expect("was just checked");
+        let [commitments] = commitments else {
+            return Err("CLIComms only supports a single message".into());
+        };
 
         print_values(*commitments, &mut self.output)?;
 

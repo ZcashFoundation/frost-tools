@@ -107,7 +107,8 @@ async fn check_step_1() {
 
     let input = format!("{num_of_participants}\n{pub_key_package}\n");
 
-    let pargs: ProcessedArgs<frost_ed25519::Ed25519Sha512> = ProcessedArgs::new(&args, &mut input.as_bytes(), &mut buf).unwrap();
+    let pargs: ProcessedArgs<frost_ed25519::Ed25519Sha512> =
+        ProcessedArgs::new(&args, &mut input.as_bytes(), &mut buf).unwrap();
 
     let mut input = Cursor::new(format!(
         "{participant_id_1}\n{commitments_input_1}\n{participant_id_3}\n{commitments_input_3}\n"
@@ -149,7 +150,8 @@ async fn check_step_3() {
     let args = Args::default();
 
     let input = format!("2\n{pub_key_package}\n{message}\n");
-    let _pargs: ProcessedArgs<frost_ed25519::Ed25519Sha512> = ProcessedArgs::new(&args, &mut input.as_bytes(), &mut buf).unwrap();
+    let _pargs: ProcessedArgs<frost_ed25519::Ed25519Sha512> =
+        ProcessedArgs::new(&args, &mut input.as_bytes(), &mut buf).unwrap();
 
     // keygen output
 
@@ -181,12 +183,8 @@ async fn check_step_3() {
         .await
         .unwrap();
 
-    let group_signature = frost::aggregate(
-        &signing_package,
-        &signature_shares[0],
-        &pub_key_package,
-    )
-    .unwrap();
+    let group_signature =
+        frost::aggregate(&signing_package, &signature_shares[0], &pub_key_package).unwrap();
 
     comms.process_signature(&[group_signature]).await.unwrap();
 

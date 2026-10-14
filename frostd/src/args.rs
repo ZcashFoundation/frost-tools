@@ -4,9 +4,6 @@ use clap::Parser;
 #[command(author, version, about, long_about = None)]
 pub struct Args {
     /// IP to bind to.
-    ///
-    /// If `no_tls_very_insecure` is set, it will bind to 127.0.0.1
-    /// regardless of the value passed here.
     #[arg(short, long, default_value = "0.0.0.0")]
     pub ip: String,
 
@@ -35,10 +32,6 @@ pub struct Args {
 impl Args {
     /// Get the effective IP to use, considering the arguments passed.
     pub fn ip(&self) -> String {
-        if self.no_tls_very_insecure {
-            "127.0.0.1".to_string()
-        } else {
-            self.ip.clone()
-        }
+        self.ip.clone()
     }
 }

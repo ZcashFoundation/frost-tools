@@ -1,8 +1,7 @@
-use std::collections::BTreeMap;
 use std::io::{BufRead, Write};
 
-use frost::{round1::SigningCommitments, Identifier, SigningPackage};
-use frost_core::{self as frost, Ciphersuite, Signature};
+use frost::SigningPackage;
+use frost_core::{self as frost, Signature};
 use frost_rerandomized::RandomizedCiphersuite;
 use itertools::izip;
 
@@ -83,9 +82,8 @@ pub async fn coordinator<C: RandomizedCiphersuite + 'static>(
                     &pargs.public_key_package,
                     randomizer_param,
                 )
-                .unwrap()
             })
-            .collect::<Vec<Signature<C>>>()
+            .collect::<Result<Vec<Signature<C>>, _>>()?
         } else {
             signing_packages
                 .iter()
@@ -96,9 +94,8 @@ pub async fn coordinator<C: RandomizedCiphersuite + 'static>(
                         signature_share,
                         &pargs.public_key_package,
                     )
-                    .unwrap()
                 })
-                .collect::<Vec<Signature<C>>>()
+                .collect::<Result<Vec<Signature<C>>, _>>()?
         };
 
         comms.process_signature(&signatures).await?;
@@ -111,11 +108,4 @@ pub async fn coordinator<C: RandomizedCiphersuite + 'static>(
         let _ = comms.cleanup_on_error().await;
     }
     r
-}
-
-pub fn build_signing_package<C: Ciphersuite>(
-    args: &ProcessedArgs<C>,
-    commitments: BTreeMap<Identifier<C>, SigningCommitments<C>>,
-) -> SigningPackage<C> {
-    SigningPackage::new(commitments, &args.messages[0])
 }

@@ -111,7 +111,8 @@ impl<C: Ciphersuite + 'static> Comms<C> for HTTPComms<C> {
             .client
             .create_new_session(&api::CreateNewSessionArgs {
                 pubkeys: self.args.signers.keys().cloned().collect(),
-                message_count: num_messages as u8,
+                message_count: u8::try_from(num_messages)
+                    .map_err(|_| eyre!("too many messages (maximum is {})", u8::MAX))?,
             })
             .await?;
 
@@ -230,7 +231,6 @@ impl<C: Ciphersuite + 'static> Comms<C> for HTTPComms<C> {
 
         let signature_shares = self.state.signature_shares()?;
 
-        // TODO: support more than 1
         Ok(signature_shares)
     }
 
