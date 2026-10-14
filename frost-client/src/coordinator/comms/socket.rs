@@ -71,13 +71,18 @@ impl<C: Ciphersuite> SocketComms<C> {
 impl<C: Ciphersuite> Comms<C> for SocketComms<C> {
     async fn get_signing_commitments(
         &mut self,
-        _pub_key_package: &PublicKeyPackage<C>,
-        num_of_participants: u16,
-    ) -> Result<BTreeMap<Identifier<C>, SigningCommitments<C>>, Box<dyn Error>> {
+        _public_key_package: &PublicKeyPackage<C>,
+        num_participants: u16,
+        num_messages: usize,
+    ) -> Result<Vec<BTreeMap<Identifier<C>, SigningCommitments<C>>>, Box<dyn Error>> {
+        // TODO: support?
+        if num_messages != 1 {
+            return Err(eyre!("SocketComms only supports one message at a time").into());
+        }
         self.endpoints = BTreeMap::new();
         let mut signing_commitments = BTreeMap::new();
         eprintln!("Waiting for participants to send their commitments...");
-        for _ in 0..num_of_participants {
+        for _ in 0..num_participants {
             let (endpoint, data) = self
                 .input_rx
                 .recv()
@@ -95,14 +100,29 @@ impl<C: Ciphersuite> Comms<C> for SocketComms<C> {
                 Err(eyre!("Expected IdentifiedCommitments message"))?;
             }
         }
-        Ok(signing_commitments)
+        Ok(vec![signing_commitments])
     }
 
     async fn send_signing_package_and_get_signature_shares(
         &mut self,
-        signing_package: &SigningPackage<C>,
-        randomizer: Option<frost_rerandomized::Randomizer<C>>,
-    ) -> Result<BTreeMap<Identifier<C>, SignatureShare<C>>, Box<dyn Error>> {
+        signing_packages: &[SigningPackage<C>],
+        randomizers: Option<&[frost_rerandomized::Randomizer<C>]>,
+        aux_msg: Option<Vec<u8>>,
+    ) -> Result<Vec<BTreeMap<Identifier<C>, SignatureShare<C>>>, Box<dyn Error>> {
+        let [signing_package] = signing_packages else {
+            return Err(eyre!("SocketComms only supports one message at a time").into());
+        };
+        let randomizer = match randomizers {
+            None => None,
+            Some([randomizer]) => Some(*randomizer),
+            Some(_) => {
+                return Err(eyre!("number of randomizers must match number of messages").into())
+            }
+        };
+        if aux_msg.is_some() {
+            return Err(eyre!("SocketComms does not support auxiliary messages").into());
+        }
+
         // Send SigningPackage to all participants
         eprintln!("Sending SigningPackage to participants...");
 
@@ -140,10 +160,13 @@ impl<C: Ciphersuite> Comms<C> for SocketComms<C> {
                 Err(eyre!("Expected IdentifiedCommitments message"))?;
             }
         }
-        Ok(signature_shares)
+        Ok(vec![signature_shares])
     }
 
-    async fn process_signature(&mut self, _signature: &Signature<C>) -> Result<(), Box<dyn Error>> {
+    async fn process_signature(
+        &mut self,
+        _signatures: &[Signature<C>],
+    ) -> Result<(), Box<dyn Error>> {
         Ok(())
     }
 }

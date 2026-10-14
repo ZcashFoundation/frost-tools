@@ -6,16 +6,73 @@ use super::comms::socket::SocketComms;
 
 use super::comms::Comms;
 
-use super::round1::{generate_nonces_and_commitments, print_values};
-use super::round2::{generate_signature, print_values_round_2, round_2_request_inputs};
-
+use crate::api::SendSigningPackageArgs;
 use frost_core::Ciphersuite;
+use frost_core::{self as frost};
+use frost_core::{
+    keys::KeyPackage,
+    round1::SigningNonces,
+    round2::{self, SignatureShare},
+};
 use frost_ed25519::Ed25519Sha512;
 use frost_rerandomized::RandomizedCiphersuite;
+use itertools::izip;
 use rand::thread_rng;
 use reddsa::frost::redpallas::PallasBlake2b512;
 use std::io::{BufRead, Write};
 use zeroize::Zeroizing;
+
+pub fn generate_signature<C: frost_rerandomized::RandomizedCiphersuite>(
+    config: SendSigningPackageArgs<C>,
+    key_package: &KeyPackage<C>,
+    signing_nonces: &[SigningNonces<C>],
+) -> Result<Vec<SignatureShare<C>>, Box<dyn std::error::Error>> {
+    if signing_nonces.len() != config.signing_package.len() {
+        return Err("Number of nonces must match number of signing packages".into());
+    }
+    // A rerandomized session has one randomizer per message; each signing
+    // package must be signed with its own randomizer, otherwise the
+    // coordinator will not be able to aggregate the shares.
+    if !config.randomizer.is_empty() && config.randomizer.len() != config.signing_package.len() {
+        return Err("Number of randomizers must match number of signing packages".into());
+    }
+
+    let signatures = if config.randomizer.is_empty() {
+        config
+            .signing_package
+            .iter()
+            .zip(signing_nonces.iter())
+            .map(|(signing_package, signing_nonces)| {
+                round2::sign(signing_package, signing_nonces, key_package)
+            })
+            .collect::<Result<Vec<_>, _>>()?
+    } else {
+        izip!(
+            config.signing_package.iter(),
+            signing_nonces.iter(),
+            config.randomizer.iter()
+        )
+        .map(|(signing_package, signing_nonces, randomizer)| {
+            frost_rerandomized::sign::<C>(signing_package, signing_nonces, key_package, *randomizer)
+        })
+        .collect::<Result<Vec<_>, _>>()?
+    };
+    Ok(signatures)
+}
+
+pub fn print_values_round_2<C: Ciphersuite>(
+    signature: SignatureShare<C>,
+    logger: &mut dyn Write,
+) -> Result<(), Box<dyn std::error::Error>> {
+    writeln!(logger, "Please send the following to the Coordinator")?;
+    writeln!(
+        logger,
+        "SignatureShare:\n{}",
+        serde_json::to_string(&signature).unwrap()
+    )?;
+
+    Ok(())
+}
 
 pub async fn cli<C: RandomizedCiphersuite + 'static>(
     args: &Args,
@@ -43,13 +100,13 @@ pub async fn cli_for_processed_args<C: RandomizedCiphersuite + 'static>(
 
     let key_package = &pargs.key_package;
 
-    let mut rng = thread_rng();
-    let (nonces, commitments) = generate_nonces_and_commitments(key_package, &mut rng);
-    let nonces = Zeroizing::new(nonces);
+    let message_count = comms.get_message_count(input, logger).await?;
 
-    if pargs.cli {
-        print_values(commitments, logger)?;
-    }
+    let mut rng = thread_rng();
+    let (nonces, commitments): (Vec<_>, Vec<_>) = (0..message_count)
+        .map(|_| frost::round1::commit(key_package.signing_share(), &mut rng))
+        .unzip();
+    let nonces = Zeroizing::new(nonces);
 
     // Round 2 - Sign
 
@@ -61,28 +118,30 @@ pub async fn cli_for_processed_args<C: RandomizedCiphersuite + 'static>(
         panic!("invalid ciphersuite");
     };
 
-    let round_2_config = round_2_request_inputs(
-        &mut *comms,
-        input,
-        logger,
-        commitments,
-        *key_package.identifier(),
-        rerandomized,
-    )
-    .await?;
+    let round_2_config = comms
+        .get_signing_package(
+            input,
+            logger,
+            &commitments,
+            *key_package.identifier(),
+            rerandomized,
+        )
+        .await?;
 
     comms
         .confirm_message(input, logger, &round_2_config)
         .await?;
 
-    let signature = generate_signature(round_2_config, key_package, &nonces)?;
+    let signatures = generate_signature(round_2_config, key_package, &nonces)?;
 
     comms
-        .send_signature_share(*key_package.identifier(), signature)
+        .send_signature_share(*key_package.identifier(), &signatures)
         .await?;
 
     if pargs.cli {
-        print_values_round_2(signature, logger)?;
+        for signature in &signatures {
+            print_values_round_2(*signature, logger)?;
+        }
     }
     writeln!(logger, "Done")?;
 

@@ -5,7 +5,6 @@ use std::fs;
 use eyre::eyre;
 use eyre::Context;
 use eyre::OptionExt;
-use frost_core::Signature;
 
 use crate::cipher::PublicKey;
 use crate::coordinator::comms::http::HTTPComms;
@@ -47,18 +46,25 @@ pub struct CoordinatorCommand {
     pub message: Vec<String>,
     /// The randomizers to use. Each instance can be a file with the raw
     /// randomizer, "" or "-". If "" or "-" is specified, then it will be
-    /// read from standard input as a hex string. If none are passed, random
-    /// ones will be generated if the ciphersuite is redpallas. If one or
-    /// more are passed, the number should match the `message` parameter.
+    /// read from standard input as a hex string. If none are passed, the
+    /// messages are signed without rerandomization, even for redpallas; for
+    /// Zcash spends you must pass the randomizers (alphas) from the PCZT. If
+    /// one or more are passed, the number should match the `message` parameter.
     #[arg(short = 'r', long)]
     pub randomizer: Vec<String>,
-    /// Where to write the generated raw bytes signature. If "-", the
-    /// human-readable hex-string is printed to stdout.
-    #[arg(short = 'o', long, default_value = "")]
-    pub signature: String,
+    /// An optional auxiliary message to include in the signing package.
+    #[arg(short = 'a', long)]
+    pub aux_message: Option<String>,
+    /// Where to write the generated raw bytes signatures. Each instance can be
+    /// a file path where the raw signature will be written, or "-". If "-" is
+    /// specified, the human-readable hex-string is printed to stdout. If none
+    /// are passed, all signatures are printed to stdout; otherwise the number
+    /// should match the number of messages.
+    #[arg(short = 'o', long)]
+    pub signature: Vec<String>,
 }
 
-pub async fn run(args: &Command) -> Result<Vec<u8>, Box<dyn Error>> {
+pub async fn run(args: &Command) -> Result<(), Box<dyn Error>> {
     let Command::Coordinator(CoordinatorCommand { config, group, .. }) = (*args).clone() else {
         panic!("invalid Command");
     };
@@ -67,24 +73,20 @@ pub async fn run(args: &Command) -> Result<Vec<u8>, Box<dyn Error>> {
 
     let group = config.group.get(&group).ok_or_eyre("Group not found")?;
 
-    let signature = if group.ciphersuite == Ed25519Sha512::ID {
-        run_for_ciphersuite::<Ed25519Sha512>(args)
-            .await?
-            .serialize()?
+    if group.ciphersuite == Ed25519Sha512::ID {
+        run_for_ciphersuite::<Ed25519Sha512>(args).await?
     } else if group.ciphersuite == PallasBlake2b512::ID {
-        run_for_ciphersuite::<PallasBlake2b512>(args)
-            .await?
-            .serialize()?
+        run_for_ciphersuite::<PallasBlake2b512>(args).await?
     } else {
         return Err(eyre!("unsupported ciphersuite").into());
     };
 
-    Ok(signature)
+    Ok(())
 }
 
 pub(crate) async fn run_for_ciphersuite<C: RandomizedCiphersuite + 'static>(
     args: &Command,
-) -> Result<Signature<C>, Box<dyn Error>> {
+) -> Result<(), Box<dyn Error>> {
     let Command::Coordinator(CoordinatorCommand {
         config,
         server_url,
@@ -93,6 +95,7 @@ pub(crate) async fn run_for_ciphersuite<C: RandomizedCiphersuite + 'static>(
         message,
         randomizer,
         signature: signature_fn,
+        aux_message,
     }) = (*args).clone()
     else {
         panic!("invalid Command");
@@ -130,7 +133,19 @@ pub(crate) async fn run_for_ciphersuite<C: RandomizedCiphersuite + 'static>(
         public_key_package,
         messages: args::read_messages(&message, &mut output, &mut input)?,
         randomizers: args::read_randomizers(&randomizer, &mut output, &mut input)?,
+        aux_msg: aux_message
+            .map(|filename| args::read_aux_message(&filename, &mut output, &mut input))
+            .transpose()?,
     };
+
+    if !signature_fn.is_empty() && signature_fn.len() != pargs.messages.len() {
+        return Err(eyre!(
+            "number of signature outputs ({}) must match number of messages ({})",
+            signature_fn.len(),
+            pargs.messages.len()
+        )
+        .into());
+    }
 
     let args = crate::coordinator::comms::http::Args {
         signers,
@@ -160,14 +175,23 @@ pub(crate) async fn run_for_ciphersuite<C: RandomizedCiphersuite + 'static>(
 
     let mut comms = HTTPComms::new(&pargs, &args)?;
 
-    let signature = cli::coordinator(&mut comms, pargs).await?;
+    let signatures = cli::coordinator(&mut comms, pargs).await?;
 
-    let serialized_signature = signature.serialize()?;
-    if signature_fn.is_empty() || signature_fn == "-" {
-        println!("{}", hex::encode(&serialized_signature));
+    // If no output was specified, print all signatures to stdout.
+    let signature_fn = if signature_fn.is_empty() {
+        vec!["-".to_string(); signatures.len()]
     } else {
-        fs::write(&signature_fn, &serialized_signature)?;
-        eprintln!("Raw signature written to {}", signature_fn);
+        signature_fn
+    };
+    for (signature, signature_fn) in signatures.iter().zip(signature_fn.iter()) {
+        let serialized_signature = signature.serialize()?;
+        if signature_fn.is_empty() || signature_fn == "-" {
+            println!("{}", hex::encode(&serialized_signature));
+        } else {
+            fs::write(signature_fn, &serialized_signature)?;
+            eprintln!("Raw signature written to {}", signature_fn);
+        }
     }
-    Ok(signature)
+
+    Ok(())
 }

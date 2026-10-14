@@ -3,8 +3,7 @@
 use crate::coordinator::{
     args::{Args, ProcessedArgs},
     comms::cli::CLIComms,
-    round_1::{get_commitments, ParticipantsConfig},
-    round_2::send_signing_package_and_get_signature_shares,
+    comms::Comms,
 };
 use frost::{
     keys::{PublicKeyPackage, VerifyingShare},
@@ -108,7 +107,8 @@ async fn check_step_1() {
 
     let input = format!("{num_of_participants}\n{pub_key_package}\n");
 
-    let pargs = ProcessedArgs::new(&args, &mut input.as_bytes(), &mut buf).unwrap();
+    let pargs: ProcessedArgs<frost_ed25519::Ed25519Sha512> =
+        ProcessedArgs::new(&args, &mut input.as_bytes(), &mut buf).unwrap();
 
     let mut input = Cursor::new(format!(
         "{participant_id_1}\n{commitments_input_1}\n{participant_id_3}\n{commitments_input_3}\n"
@@ -118,14 +118,16 @@ async fn check_step_1() {
 
     let (signer_pub_keys, group_public) = build_pub_key_package();
 
-    let expected_participants_config = ParticipantsConfig {
-        commitments: signing_commitments.clone(),
-        pub_key_package: PublicKeyPackage::new(signer_pub_keys, group_public),
-    };
+    let expected_commitments = signing_commitments.clone();
+    let expected_pub_key_package = PublicKeyPackage::new(signer_pub_keys, group_public);
 
-    let participants_config = get_commitments(&pargs, &mut comms).await;
+    let commitments_list = comms
+        .get_signing_commitments(&pargs.public_key_package, pargs.num_signers, 1)
+        .await
+        .unwrap();
 
-    assert!(participants_config.unwrap() == expected_participants_config);
+    assert_eq!(commitments_list[0], expected_commitments);
+    assert_eq!(pargs.public_key_package, expected_pub_key_package);
 }
 
 // // Input required:
@@ -138,7 +140,7 @@ async fn check_step_3() {
         participant_id_3,
         signature_1,
         signature_3,
-        group_signature,
+        group_signature: _,
         message,
         pub_key_package,
         ..
@@ -148,7 +150,8 @@ async fn check_step_3() {
     let args = Args::default();
 
     let input = format!("2\n{pub_key_package}\n{message}\n");
-    let pargs = ProcessedArgs::new(&args, &mut input.as_bytes(), &mut buf).unwrap();
+    let _pargs: ProcessedArgs<frost_ed25519::Ed25519Sha512> =
+        ProcessedArgs::new(&args, &mut input.as_bytes(), &mut buf).unwrap();
 
     // keygen output
 
@@ -161,11 +164,7 @@ async fn check_step_3() {
     let mut valid_input = input.as_bytes();
 
     let commitments = build_signing_commitments();
-
-    let participants_config = ParticipantsConfig {
-        commitments: commitments.clone(),
-        pub_key_package: PublicKeyPackage::new(signer_pubkeys, group_public),
-    };
+    let pub_key_package = PublicKeyPackage::new(signer_pubkeys, group_public);
 
     let message = hex::decode(message).unwrap();
 
@@ -175,16 +174,22 @@ async fn check_step_3() {
     let mut buf = BufWriter::new(Vec::new());
     let mut comms = CLIComms::new(&mut valid_input, &mut buf);
 
-    send_signing_package_and_get_signature_shares(
-        &pargs,
-        &mut comms,
-        participants_config,
-        &signing_package,
-    )
-    .await
-    .unwrap();
+    let signature_shares = comms
+        .send_signing_package_and_get_signature_shares(
+            std::slice::from_ref(&signing_package),
+            None,
+            None,
+        )
+        .await
+        .unwrap();
 
-    let expected = format!("Signing Package:\n{{\"header\":{{\"version\":0,\"ciphersuite\":\"FROST-ED25519-SHA512-v1\"}},\"signing_commitments\":{{\"0100000000000000000000000000000000000000000000000000000000000000\":{{\"header\":{{\"version\":0,\"ciphersuite\":\"FROST-ED25519-SHA512-v1\"}},\"hiding\":\"4a413c35349ebb5cc2b931270c5886df98b6e1e621bd364648b99e3cf7f02bbf\",\"binding\":\"fa99e65abd54bf22a005109591a1a8cf060cdb80155a408b005c5187697d8a4b\"}},\"0300000000000000000000000000000000000000000000000000000000000000\":{{\"header\":{{\"version\":0,\"ciphersuite\":\"FROST-ED25519-SHA512-v1\"}},\"hiding\":\"50de72191c1d6473954113df25bd05fa4915c01813a70cf1e93db5f75e49e949\",\"binding\":\"ddec2b43bc985d653229ce7bfa829a157c33baad284e2c35eafd8c3886d18a8b\"}}}},\"message\":\"74657374\"}}\nPlease enter JSON encoded signature shares for participant {participant_id_1}:\nPlease enter JSON encoded signature shares for participant {participant_id_3}:\nSignature:\n{group_signature}\n");
+    let group_signature =
+        frost::aggregate(&signing_package, &signature_shares[0], &pub_key_package).unwrap();
+
+    comms.process_signature(&[group_signature]).await.unwrap();
+
+    let group_signature_hex = hex::encode(group_signature.serialize().unwrap());
+    let expected = format!("Signing Package:\n{{\"header\":{{\"version\":0,\"ciphersuite\":\"FROST-ED25519-SHA512-v1\"}},\"signing_commitments\":{{\"0100000000000000000000000000000000000000000000000000000000000000\":{{\"header\":{{\"version\":0,\"ciphersuite\":\"FROST-ED25519-SHA512-v1\"}},\"hiding\":\"4a413c35349ebb5cc2b931270c5886df98b6e1e621bd364648b99e3cf7f02bbf\",\"binding\":\"fa99e65abd54bf22a005109591a1a8cf060cdb80155a408b005c5187697d8a4b\"}},\"0300000000000000000000000000000000000000000000000000000000000000\":{{\"header\":{{\"version\":0,\"ciphersuite\":\"FROST-ED25519-SHA512-v1\"}},\"hiding\":\"50de72191c1d6473954113df25bd05fa4915c01813a70cf1e93db5f75e49e949\",\"binding\":\"ddec2b43bc985d653229ce7bfa829a157c33baad284e2c35eafd8c3886d18a8b\"}}}},\"message\":\"74657374\"}}\nPlease enter JSON encoded signature shares for participant {participant_id_1}:\nPlease enter JSON encoded signature shares for participant {participant_id_3}:\nSignature:\n{group_signature_hex}\n");
 
     buf.flush().unwrap();
     let actual = String::from_utf8(buf.into_inner().unwrap()).unwrap();

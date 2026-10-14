@@ -247,10 +247,15 @@ type PoolSignature = (Pool, usize, [u8; 64]);
 fn prompt_for_signatures(
     randomizers: &[PoolRandomizer],
 ) -> Result<Vec<PoolSignature>, Box<dyn Error>> {
-    let mut signatures = vec![];
+    // Print all randomizers first so they can all be handed to the coordinator
+    // at once (one per message) before any signature is requested.
     for (pool, idx, alpha) in randomizers {
         let pool_label = pool.label();
         println!("Randomizer #{idx} ({pool_label}): {}", hex::encode(alpha));
+    }
+    let mut signatures = vec![];
+    for (pool, idx, _alpha) in randomizers {
+        let pool_label = pool.label();
         println!("Input hex-encoded signature #{idx} ({pool_label}): ");
         let mut buffer = String::new();
         std::io::stdin().read_line(&mut buffer)?;

@@ -51,9 +51,9 @@ pub struct Args {
 
     /// The randomizers to use. Each instance can be a file with the raw
     /// randomizer, "" or "-". If "" or "-" is specified, then it will be read
-    /// from standard input as a hex string. If none are passed, random ones
-    /// will be generated. If one or more are passed, the number should match
-    /// the `message` parameter.
+    /// from standard input as a hex string. If none are passed, the messages
+    /// are signed without rerandomization, even for redpallas. If one or more
+    /// are passed, the number should match the `message` parameter.
     #[arg(short = 'r', long)]
     pub randomizer: Vec<String>,
 
@@ -86,6 +86,9 @@ pub struct ProcessedArgs<C: Ciphersuite> {
 
     /// The randomizers to use.
     pub randomizers: Vec<Randomizer<C>>,
+
+    /// An optional auxiliary message to include in the signing package.
+    pub aux_msg: Option<Vec<u8>>,
 }
 
 impl<C: Ciphersuite + 'static> ProcessedArgs<C> {
@@ -128,6 +131,8 @@ impl<C: Ciphersuite + 'static> ProcessedArgs<C> {
             public_key_package,
             messages,
             randomizers,
+            // TODO: add support
+            aux_msg: None,
         })
     }
 }
@@ -171,6 +176,23 @@ pub fn read_messages(
             .collect::<Result<_, Box<dyn Error>>>()?
     };
     Ok(messages)
+}
+
+pub fn read_aux_message(
+    filename: &String,
+    output: &mut dyn Write,
+    input: &mut dyn BufRead,
+) -> Result<Vec<u8>, Box<dyn Error>> {
+    let msg = if *filename == "-" || filename.is_empty() {
+        writeln!(output, "The aux message to be sent (hex encoded)")?;
+        let mut msg = String::new();
+        input.read_line(&mut msg)?;
+        hex::decode(msg.trim())?
+    } else {
+        eprintln!("Reading aux message from {}...", filename);
+        fs::read(filename)?
+    };
+    Ok(msg)
 }
 
 pub fn read_randomizers<C: Ciphersuite + 'static>(
