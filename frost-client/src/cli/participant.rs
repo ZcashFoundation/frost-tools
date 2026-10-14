@@ -103,5 +103,7 @@ pub(crate) async fn run_for_ciphersuite<C: RandomizedCiphersuite + 'static>(
 
     participant(&mut comms, pargs).await?;
 
+    println!("Done");
+
     Ok(())
 }

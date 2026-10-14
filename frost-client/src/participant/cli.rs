@@ -58,16 +58,18 @@ pub fn generate_signature<C: frost_rerandomized::RandomizedCiphersuite>(
     Ok(signatures)
 }
 
-// Use implementations from participant::round2
-
 pub async fn cli<C: RandomizedCiphersuite + 'static>(
     args: &Args,
     reader: &mut impl BufRead,
     logger: &mut impl Write,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let pargs = ProcessedArgs::<C>::new(args, reader, logger)?;
-    let mut comms = CLIComms::new(reader, logger);
-    participant(&mut comms, pargs).await
+    {
+        let mut comms = CLIComms::new(reader, logger);
+        participant(&mut comms, pargs).await?;
+    }
+    writeln!(logger, "Done")?;
+    Ok(())
 }
 
 pub async fn participant<C: RandomizedCiphersuite + 'static>(

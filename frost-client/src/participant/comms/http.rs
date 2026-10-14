@@ -9,6 +9,7 @@ use eyre::{eyre, OptionExt};
 use frost_core::{round1::SigningCommitments, round2::SignatureShare, Ciphersuite, Identifier};
 use rand::thread_rng;
 use snow::{HandshakeState, TransportState};
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use crate::api::{self, PublicKey, SendSigningPackageArgs, Uuid};
 use crate::cipher::{Cipher, PrivateKey};
@@ -124,6 +125,14 @@ pub struct Args {
     #[allow(clippy::type_complexity)]
     pub comm_coordinator_pubkey_getter: Option<Rc<dyn Fn(&PublicKey) -> Option<PublicKey>>>,
 }
+
+impl Drop for Args {
+    fn drop(&mut self) {
+        self.comm_privkey.zeroize();
+    }
+}
+
+impl ZeroizeOnDrop for Args {}
 
 pub struct HTTPComms<C: Ciphersuite> {
     client: Client,

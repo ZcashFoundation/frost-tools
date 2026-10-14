@@ -23,9 +23,10 @@ pub struct Args {
     #[arg(short = 'C', long, default_value = "ed25519")]
     pub ciphersuite: String,
 
-    /// CLI mode. If enabled, it will prompt for inputs from stdin
-    /// and print values to stdout, ignoring other flags.
-    /// If false, socket communication is enabled.
+    /// CLI mode. This is the only mode supported by this binary (it will
+    /// prompt for inputs from stdin and print values to stdout); the flag is
+    /// accepted for backwards compatibility and has no effect. Use
+    /// `frost-client participant` for HTTP mode.
     #[arg(long, default_value_t = false)]
     pub cli: bool,
 
@@ -34,18 +35,6 @@ pub struct Args {
     /// then it will be read from standard input.
     #[arg(short = 'k', long, default_value = "key-package-1.json")]
     pub key_package: String,
-
-    /// IP to connect to, if using online comms
-    #[arg(short, long, default_value = "127.0.0.1")]
-    pub ip: String,
-
-    /// Port to connect to, if using online comms
-    #[arg(short, long, default_value_t = 443)]
-    pub port: u16,
-
-    /// Optional Session ID
-    #[arg(short, long, default_value = "")]
-    pub session_id: String,
 }
 
 #[derive(Clone, Zeroize)]
