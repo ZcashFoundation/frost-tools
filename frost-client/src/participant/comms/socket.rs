@@ -7,10 +7,13 @@ use frost_core::{self as frost, Ciphersuite};
 use crate::api::SendSigningPackageArgs;
 use eyre::eyre;
 use message_io::{
-    network::{Endpoint, NetEvent, Transport},
+    network::{Endpoint, NetEvent, SendStatus, Transport},
     node::{self, NodeHandler, NodeListener},
 };
-use tokio::sync::mpsc::{self, error::TrySendError, Receiver, Sender};
+use tokio::sync::{
+    mpsc::{self, error::TrySendError, Receiver, Sender},
+    watch,
+};
 
 use frost::{round1::SigningCommitments, round2::SignatureShare, Identifier};
 
@@ -18,7 +21,10 @@ use std::{error::Error, io::stdin, marker::PhantomData};
 
 use super::{Comms, Message};
 
+type Connection = Option<Result<(), &'static str>>;
+
 pub struct SocketComms<C: Ciphersuite> {
+    connection: watch::Receiver<Connection>,
     input_rx: Receiver<(Endpoint, Vec<u8>)>,
     endpoint: Endpoint,
     handler: NodeHandler<()>,
@@ -32,7 +38,8 @@ where
     pub fn new(ip: String, port: String) -> Self {
         let (handler, listener) = node::split::<()>();
         let addr = format!("{}:{}", ip, port);
-        let (tx, rx) = mpsc::channel(2000); // Don't need to receive the endpoint. Change this
+        let (tx, rx) = mpsc::channel(2000);
+        let (state_tx, connection) = watch::channel(None);
 
         let (endpoint, _addr) = handler
             .network()
@@ -40,49 +47,85 @@ where
             .unwrap();
 
         let socket_comm = Self {
+            connection,
             input_rx: rx,
             endpoint,
             handler,
             _phantom: Default::default(),
         };
 
-        // TODO: save handle
         let run_handler = socket_comm.handler.clone();
-        let _handle = tokio::spawn(async move { Self::run(run_handler, listener, tx) });
+        tokio::task::spawn_blocking(move || Self::run(run_handler, listener, tx, state_tx));
 
         socket_comm
+    }
+
+    async fn check_connection(&mut self) -> Result<(), Box<dyn Error>> {
+        loop {
+            if let Some(status) = *self.connection.borrow_and_update() {
+                return status.map_err(Into::into);
+            }
+            self.connection.changed().await?;
+        }
+    }
+
+    async fn send(&mut self, data: &[u8]) -> Result<(), Box<dyn Error>> {
+        self.check_connection().await?;
+        match self.handler.network().send(self.endpoint, data) {
+            SendStatus::Sent => Ok(()),
+            status => Err(eyre!("Could not send message to coordinator: {status:?}").into()),
+        }
+    }
+
+    async fn recv(&mut self) -> Result<Vec<u8>, Box<dyn Error>> {
+        self.check_connection().await?;
+        let frame = self.input_rx.recv().await;
+        self.check_connection().await?;
+        let (_, data) = frame.ok_or(eyre!("Did not receive signing package"))?;
+        Ok(data)
     }
 
     fn run(
         handler: NodeHandler<()>,
         listener: NodeListener<()>,
         input_tx: Sender<(Endpoint, Vec<u8>)>,
+        state: watch::Sender<Connection>,
     ) {
         // Read incoming network events.
         listener.for_each(|event| match event.network() {
-            NetEvent::Connected(endpoint, false) => {
-                println!("Error connecting to server at {endpoint}")
-            } // Used for explicit connections.
-            NetEvent::Connected(endpoint, true) => println!("Connected to server at {endpoint}"), // Used for explicit connections.
+            NetEvent::Connected(_, false) => {
+                state.send_replace(Some(Err("Could not connect to coordinator")));
+                handler.stop();
+            }
+            NetEvent::Connected(_, true) => {
+                state.send_replace(Some(Ok(())));
+            }
             NetEvent::Accepted(endpoint, _listener) => {
                 println!("Server accepted connection at {endpoint}")
             } // Tcp or Ws
             NetEvent::Message(endpoint, data) => {
-                println!("Received: {}", String::from_utf8_lossy(data));
                 match input_tx.try_send((endpoint, data.to_vec())) {
                     Ok(()) => {}
                     Err(TrySendError::Full(_)) => {
-                        eprintln!("Input queue full, disconnecting from server at {endpoint}");
+                        state.send_replace(Some(Err("Coordinator input queue overflow")));
                         handler.network().remove(endpoint.resource_id());
+                        handler.stop();
                     }
                     // The receiving side was dropped, so nothing will read further messages.
                     Err(TrySendError::Closed(_)) => handler.stop(),
                 }
             }
-            NetEvent::Disconnected(endpoint) => {
-                println!("Disconnected from server at {endpoint}")
-            } //Tcp or Ws
+            NetEvent::Disconnected(_) => {
+                state.send_replace(Some(Err("Coordinator disconnected")));
+                handler.stop();
+            }
         });
+    }
+}
+
+impl<C: Ciphersuite> Drop for SocketComms<C> {
+    fn drop(&mut self) {
+        self.handler.stop();
     }
 }
 
@@ -110,14 +153,10 @@ where
             identifier,
             commitments,
         })?;
-        self.handler.network().send(self.endpoint, &data);
+        self.send(&data).await?;
 
         // Receive SigningPackage from Coordinator
-        let (_endpoint, data) = self
-            .input_rx
-            .recv()
-            .await
-            .ok_or(eyre!("Did not receive signing package!"))?;
+        let data = self.recv().await?;
 
         let message: Message<C> = serde_json::from_slice(&data)?;
         if let Message::SigningPackageAndRandomizer {
@@ -145,7 +184,7 @@ where
         };
         // Send signature shares to Coordinator
         let data = serde_json::to_vec(&Message::SignatureShare(signature_share))?;
-        self.handler.network().send(self.endpoint, &data);
+        self.send(&data).await?;
 
         Ok(())
     }
@@ -183,7 +222,7 @@ mod tests {
         node::{self, NodeHandler},
     };
 
-    use super::SocketComms;
+    use super::{Comms, Identifier, SignatureShare, SocketComms};
 
     const TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -244,7 +283,7 @@ mod tests {
     async fn full_input_queue_disconnects_coordinator() {
         let (server, port, accepted, disconnected) = start_server();
         let _stop_server = StopOnDrop(server.clone());
-        let comms = SocketComms::<Ed25519Sha512>::new("127.0.0.1".to_string(), port);
+        let mut comms = SocketComms::<Ed25519Sha512>::new("127.0.0.1".to_string(), port);
         let _stop_comms = StopOnDrop(comms.handler.clone());
         let participant = accepted.recv_timeout(TIMEOUT).unwrap();
 
@@ -256,10 +295,14 @@ mod tests {
         disconnected
             .recv_timeout(TIMEOUT)
             .expect("participant should close the flooding connection");
-        assert!(comms.handler.is_running());
-
-        // Nothing reads the queue, so it stays exactly full.
-        assert_eq!(comms.input_rx.len(), 2000);
+        let identifier = Identifier::try_from(1).unwrap();
+        let share = SignatureShare::deserialize(&[1; 32]).unwrap();
+        let error = comms
+            .send_signature_share(identifier, &[share])
+            .await
+            .unwrap_err();
+        assert_eq!(error.to_string(), "Coordinator input queue overflow");
+        assert!(comms.recv().await.is_err());
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -267,13 +310,12 @@ mod tests {
         let (server, port, accepted, _) = start_server();
         let _stop_server = StopOnDrop(server.clone());
         let comms = SocketComms::<Ed25519Sha512>::new("127.0.0.1".to_string(), port);
-        let participant = accepted.recv_timeout(TIMEOUT).unwrap();
+        accepted.recv_timeout(TIMEOUT).unwrap();
+        let connection = comms.connection.clone();
         let handler = comms.handler.clone();
         let _stop_comms = StopOnDrop(handler.clone());
         drop(comms);
 
-        server.network().send(participant, b"hello");
-
-        wait_until("the listener to stop", || !handler.is_running()).await;
+        wait_until("the listener to stop", || connection.has_changed().is_err()).await;
     }
 }
